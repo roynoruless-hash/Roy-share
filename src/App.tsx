@@ -372,8 +372,7 @@ function AdminDashboard({
         
         const contentType = res.headers.get("content-type");
         if (contentType && contentType.includes("text/html")) {
-          // Ignored due to proxy interception in preview
-          return;
+          throw new Error("Received HTML. API proxy is misconfigured or missing.");
         }
 
         const data = await res.json();
@@ -443,7 +442,7 @@ function AdminDashboard({
       if (!res.ok) throw new Error(await res.text());
       const contentType = res.headers.get("content-type");
       if (contentType && contentType.includes("text/html")) {
-        return;
+        throw new Error("API proxy missing on Netlify");
       }
       const data = await res.json();
       setSysStatus(data);
@@ -455,9 +454,10 @@ function AdminDashboard({
         });
         if (statsRes.ok) {
           const statsType = statsRes.headers.get("content-type");
-          if (!statsType || !statsType.includes("text/html")) {
-            setStorageStats(await statsRes.json());
+          if (statsType && statsType.includes("text/html")) {
+             throw new Error("Received HTML. API proxy is misconfigured or missing.");
           }
+          setStorageStats(await statsRes.json());
         }
       }
     } catch (err: any) {
@@ -505,6 +505,11 @@ function AdminDashboard({
           },
           body: JSON.stringify(configToSave),
         });
+
+        const contentType = res.headers.get("content-type");
+        if (contentType && contentType.includes("text/html")) {
+          throw new Error("Received HTML. API proxy is misconfigured or missing.");
+        }
 
         if (!res.ok) {
           const errText = await res.text();
@@ -1238,8 +1243,7 @@ function WithdrawalsAdminPanel({ user }: { user: any }) {
       }
       const contentType = res.headers.get("content-type");
       if (contentType && contentType.includes("text/html")) {
-        // Ignored. Proxy interception fallback to index.html in preview environment
-        return;
+        throw new Error("Received HTML. API proxy is misconfigured or missing.");
       }
       const text = await res.text();
       try {
@@ -1545,7 +1549,9 @@ function UsersAdminPanel({ user }: { user: any }) {
       });
       if (!res.ok) return;
       const contentType = res.headers.get("content-type");
-      if (contentType && contentType.includes("text/html")) return;
+      if (contentType && contentType.includes("text/html")) {
+        throw new Error("Received HTML. API proxy is misconfigured or missing.");
+      }
       const data = await res.json();
       setUsers(data);
     } catch (e: any) {
