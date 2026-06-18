@@ -1,0 +1,63 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User profile information",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "email": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "email", "createdAt"]
+    },
+    "File": {
+      "title": "File",
+      "description": "File metadata",
+      "type": "object",
+      "properties": {
+        "fileId": { "type": "string" },
+        "userId": { "type": "string" },
+        "fileName": { "type": "string" },
+        "fileSize": { "type": "number" },
+        "uploadDate": { "type": "string", "format": "date-time" },
+        "downloadCount": { "type": "number" },
+        "earnings": { "type": "number" },
+        "storageUrl": { "type": "string" },
+        "expiryDate": { "type": "string", "format": "date-time" },
+        "status": { "type": "string" }
+      },
+      "required": ["fileId", "userId", "fileName"]
+    },
+    "TelegramConfig": {
+      "title": "TelegramConfig",
+      "description": "Telegram configuration settings",
+      "type": "object",
+      "properties": {
+        "botToken": { "type": "string" },
+        "ownerChatId": { "type": "string" },
+        "requiredChannel": { "type": "string" },
+        "requiredGroup": { "type": "string" },
+        "webhookUrl": { "type": "string" },
+        "botUsername": { "type": "string" },
+        "isConnected": { "type": "boolean" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["botToken", "ownerChatId"]
+    }
+  },
+  "firestore": {
+    "users/{userId}": {
+      "schema": { "$ref": "User" },
+      "description": "User profiles"
+    },
+    "files/{fileId}": {
+      "schema": { "$ref": "File" },
+      "description": "Files uploaded by users"
+    },
+    "settings/telegram_config": {
+      "schema": { "$ref": "TelegramConfig" },
+      "description": "Telegram bot settings"
+    }
+  }
+}
