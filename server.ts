@@ -3600,33 +3600,36 @@ function startConfigWatcher() {
   // Config is now supervised via API due to AI studio permissions
 }
 
+function syncConfigToMemory(data: any) {
+  ownerChatId = data.ownerChatId || "";
+  requiredChannel = data.requiredChannel || "";
+  requiredGroup = data.requiredGroup || "";
+  storageChannel = data.storageChannel || "";
+  referralCommissionRate = data.referralCommissionRate ?? 10;
+  adsEnabled = data.adsEnabled === true || data.adsEnabled === "true";
+  adsScript = data.adsScript || "";
+  adsPosition = data.adsPosition || "middle";
+  if (data.adsList !== undefined) adsList = Array.isArray(data.adsList) ? data.adsList : [];
+  if (data.popunderConfig !== undefined) popunderConfig = data.popunderConfig;
+  if (data.directLinkConfig !== undefined) directLinkConfig = data.directLinkConfig;
+  if (data.socialBarConfig !== undefined) socialBarConfig = data.socialBarConfig;
+
+  if (data.botToken && data.botToken !== currentBotToken) {
+    console.log("Detected new Bot Token via API. Re-initializing...");
+    if (bot) {
+      try {
+        bot.stop("restarting api");
+      } catch (e) {}
+      setTimeout(() => setupBot(data.botToken), 2000);
+    } else {
+      setupBot(data.botToken);
+    }
+  }
+}
+
 app.post("/api/admin/config/sync_mem", requireAdmin, async (req, res) => {
   try {
-    const data = req.body;
-    ownerChatId = data.ownerChatId || "";
-    requiredChannel = data.requiredChannel || "";
-    requiredGroup = data.requiredGroup || "";
-    storageChannel = data.storageChannel || "";
-    referralCommissionRate = data.referralCommissionRate ?? 10;
-    adsEnabled = data.adsEnabled === true || data.adsEnabled === "true";
-    adsScript = data.adsScript || "";
-    adsPosition = data.adsPosition || "middle";
-    if (data.adsList !== undefined) adsList = Array.isArray(data.adsList) ? data.adsList : [];
-    if (data.popunderConfig !== undefined) popunderConfig = data.popunderConfig;
-    if (data.directLinkConfig !== undefined) directLinkConfig = data.directLinkConfig;
-    if (data.socialBarConfig !== undefined) socialBarConfig = data.socialBarConfig;
-
-    if (data.botToken && data.botToken !== currentBotToken) {
-      console.log("Detected new Bot Token via API. Re-initializing...");
-      if (bot) {
-        try {
-          bot.stop("restarting api");
-        } catch (e) {}
-        setTimeout(() => setupBot(data.botToken), 2000);
-      } else {
-        setupBot(data.botToken);
-      }
-    }
+    syncConfigToMemory(req.body);
     res.json({ success: true });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
@@ -3690,15 +3693,8 @@ app.post("/api/admin/save-config", requireAdmin, async (req, res) => {
 
     console.log("Save completed successfully.");
 
-    // Also sync the memory state
-    await fetch(`http://localhost:${PORT}/api/admin/config/sync_mem`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: req.headers.authorization || "",
-      },
-      body: JSON.stringify(config),
-    });
+    // Also sync the memory state directly
+    syncConfigToMemory(config);
 
     res.json({ success: true });
   } catch (err: any) {
