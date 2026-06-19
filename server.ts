@@ -3,7 +3,8 @@ import express from "express";
 import cors from "cors";
 import path from "path";
 import fs from "fs";
-import { createServer as createViteServer } from "vite";
+// vite will be dynamically imported if needed
+// import { createServer as createViteServer } from "vite";
 import { Telegraf, Markup } from "telegraf";
 import { auth } from "./src/lib/firebase-admin";
 import firebaseConfig from "./firebase-applet-config.json";
@@ -18,6 +19,10 @@ import {
 import { Readable } from "stream";
 
 export const perfStorage = new AsyncLocalStorage<any>();
+
+const FB_PROJECT_ID = process.env.FIREBASE_PROJECT_ID || firebaseConfig.projectId;
+const FB_DATABASE_ID = process.env.FIREBASE_DATABASE_ID || (firebaseConfig.firestoreDatabaseId === '(default)' ? '(default)' : (firebaseConfig.firestoreDatabaseId || '(default)'));
+const FB_API_KEY = process.env.FIREBASE_API_KEY || firebaseConfig.apiKey;
 
 const pendingUploads = new Map<
   number,
@@ -62,7 +67,7 @@ const APP_URL_RAW =
   "https://royshare.netlify.app";
 
 const APP_URL = APP_URL_RAW.replace(/\/+$/, "").replace(/^http:\/\//i, "https://");
-const isDevSpace = APP_URL.includes("ais-dev-");
+const isServerlessMode = process.env.NETLIFY === "true" || !!process.env.AWS_LAMBDA_FUNCTION_NAME;
 
 console.log(
   "SERVER BOOT: TELEGRAM_BOT_TOKEN defined:",
@@ -180,8 +185,8 @@ app.get("/api/health", (req, res) => {
 
 async function saveAdsConfigInternal() {
   try {
-    const dbId = firebaseConfig.firestoreDatabaseId === "(default)" ? "(default)" : (firebaseConfig.firestoreDatabaseId || "(default)");
-    const url = `https://firestore.googleapis.com/v1/projects/${firebaseConfig.projectId}/databases/${dbId}/documents/settings/telegram_config?key=${firebaseConfig.apiKey}`;
+    const dbId = FB_DATABASE_ID;
+    const url = `https://firestore.googleapis.com/v1/projects/${FB_PROJECT_ID}/databases/${dbId}/documents/settings/telegram_config?key=${FB_API_KEY}`;
     
     // Fetch current document first to keep existing fields safe
     let currentFields: any = {};
@@ -210,7 +215,7 @@ async function saveAdsConfigInternal() {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        name: `projects/${firebaseConfig.projectId}/databases/${dbId}/documents/settings/telegram_config`,
+        name: `projects/${FB_PROJECT_ID}/databases/${dbId}/documents/settings/telegram_config`,
         fields,
       }),
     });
@@ -432,11 +437,11 @@ app.get("/api/admin/storage-stats", requireAdmin, async (req, res) => {
     };
 
     const dbId =
-      firebaseConfig.firestoreDatabaseId === "(default)"
+      FB_DATABASE_ID === "(default)"
         ? "(default)"
-        : firebaseConfig.firestoreDatabaseId;
-    const baseUrl = `https://firestore.googleapis.com/v1/projects/${firebaseConfig.projectId}/databases/${dbId}/documents`;
-    const key = `?key=${firebaseConfig.apiKey}`;
+        : FB_DATABASE_ID;
+    const baseUrl = `https://firestore.googleapis.com/v1/projects/${FB_PROJECT_ID}/databases/${dbId}/documents`;
+    const key = `?key=${FB_API_KEY}`;
 
     let lastUpload = "Never";
     let totalFiles = 0;
@@ -1896,8 +1901,8 @@ app.get("/api/admin/config", requireAdmin, async (req, res) => {
   res.setHeader("Pragma", "no-cache");
   res.setHeader("Expires", "0");
   try {
-    const dbId = firebaseConfig.firestoreDatabaseId || "(default)";
-    const url = `https://firestore.googleapis.com/v1/projects/${firebaseConfig.projectId}/databases/${dbId}/documents/settings/telegram_config?key=${firebaseConfig.apiKey}`;
+    const dbId = FB_DATABASE_ID || "(default)";
+    const url = `https://firestore.googleapis.com/v1/projects/${FB_PROJECT_ID}/databases/${dbId}/documents/settings/telegram_config?key=${FB_API_KEY}`;
 
     const fetchRes = await fetch(url);
     if (fetchRes.ok) {
@@ -1982,8 +1987,8 @@ app.get("/api/admin/config", requireAdmin, async (req, res) => {
 
 app.get("/api/admin/config/test", async (req, res) => {
   try {
-    const dbId = firebaseConfig.firestoreDatabaseId || "(default)";
-    const url = `https://firestore.googleapis.com/v1/projects/${firebaseConfig.projectId}/databases/${dbId}/documents/settings/telegram_config?key=${firebaseConfig.apiKey}`;
+    const dbId = FB_DATABASE_ID || "(default)";
+    const url = `https://firestore.googleapis.com/v1/projects/${FB_PROJECT_ID}/databases/${dbId}/documents/settings/telegram_config?key=${FB_API_KEY}`;
     const fetchRes = await fetch(url);
     if (fetchRes.ok) {
       const data = await fetchRes.json();
@@ -2012,8 +2017,8 @@ app.get("/api/admin/diagnose", requireAdmin, async (req, res) => {
   }
 
   try {
-    const dbId = firebaseConfig.firestoreDatabaseId || "(default)";
-    const url = `https://firestore.googleapis.com/v1/projects/${firebaseConfig.projectId}/databases/${dbId}/documents/settings/telegram_config?key=${firebaseConfig.apiKey}`;
+    const dbId = FB_DATABASE_ID || "(default)";
+    const url = `https://firestore.googleapis.com/v1/projects/${FB_PROJECT_ID}/databases/${dbId}/documents/settings/telegram_config?key=${FB_API_KEY}`;
     const fetchRes = await fetch(url);
 
     if (fetchRes.ok) {
@@ -3499,10 +3504,10 @@ File Size: ${(fileSize / 1024 / 1024).toFixed(2)} MB`);
       }
     });
 
-    // Use Webhooks if VITE_API_URL is set (Cloud Run), otherwise use Polling (Local/AI Studio)
-    const backendUrl = process.env.VITE_API_URL;
+    // Use Webhooks if on Netlify (Serverless Mode), otherwise use Polling
+    const backendUrl = isServerlessMode ? APP_URL : "";
     if (backendUrl) {
-      console.log(`SERVER SETUP: VITE_API_URL detected (${backendUrl}). Configuring webhook...`);
+      console.log(`SERVER SETUP: Webhook backend URL detected (${backendUrl}). Configuring webhook...`);
       const webhookEndpoint = `${backendUrl}/api/telegram-webhook`;
       try {
         await newBot.telegram.setWebhook(webhookEndpoint, { drop_pending_updates: true });
@@ -3686,8 +3691,8 @@ app.post("/api/admin/save-config", requireAdmin, async (req, res) => {
       socialBarConfigJson: { stringValue: JSON.stringify(config.socialBarConfig || { enabled: false, script: "" }) },
     };
 
-    const dbId = firebaseConfig.firestoreDatabaseId || "(default)";
-    const url = `https://firestore.googleapis.com/v1/projects/${firebaseConfig.projectId}/databases/${dbId}/documents/settings/telegram_config?key=${firebaseConfig.apiKey}`;
+    const dbId = FB_DATABASE_ID || "(default)";
+    const url = `https://firestore.googleapis.com/v1/projects/${FB_PROJECT_ID}/databases/${dbId}/documents/settings/telegram_config?key=${FB_API_KEY}`;
 
     const fetchRes = await fetch(url, {
       method: "PATCH",
@@ -3695,7 +3700,7 @@ app.post("/api/admin/save-config", requireAdmin, async (req, res) => {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        name: `projects/${firebaseConfig.projectId}/databases/${dbId}/documents/settings/telegram_config`,
+        name: `projects/${FB_PROJECT_ID}/databases/${dbId}/documents/settings/telegram_config`,
         fields,
       }),
     });
@@ -3744,10 +3749,10 @@ async function initializeBotFromFirestore() {
 
   try {
     const dbId =
-      firebaseConfig.firestoreDatabaseId === "(default)"
+      FB_DATABASE_ID === "(default)"
         ? "(default)"
-        : firebaseConfig.firestoreDatabaseId;
-    const url = `https://firestore.googleapis.com/v1/projects/${firebaseConfig.projectId}/databases/${dbId}/documents/settings/telegram_config?key=${firebaseConfig.apiKey}`;
+        : FB_DATABASE_ID;
+    const url = `https://firestore.googleapis.com/v1/projects/${FB_PROJECT_ID}/databases/${dbId}/documents/settings/telegram_config?key=${FB_API_KEY}`;
 
     const fetchRes = await fetch(url);
     if (fetchRes.ok) {
@@ -3831,13 +3836,14 @@ async function startServer() {
   });
 
   // Vite middleware for development
-  if (process.env.NODE_ENV !== "production") {
+  if (!isServerlessMode && process.env.NODE_ENV !== "production") {
+    const { createServer: createViteServer } = await import("vite");
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: "spa",
     });
     app.use(vite.middlewares);
-  } else {
+  } else if (!isServerlessMode) {
     const distPath = path.join(process.cwd(), "dist");
     app.use(express.static(distPath));
     app.get("*", (req, res) => {
@@ -3850,4 +3856,16 @@ async function startServer() {
   });
 }
 
-startServer();
+if (!isServerlessMode) {
+  startServer();
+} else {
+  // In Netlify, we just need to ensure bot is initialized before the first request if possible,
+  // but it's better to catch all API routes
+  app.all("/api/*", (req, res, next) => {
+    // If bot isn't init yet, we can do it lazily or just let the route run, 
+    // but the catch-all for 404 should be at the end.
+    next();
+  });
+}
+
+export { app, initializeBotFromFirestore };

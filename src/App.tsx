@@ -306,10 +306,8 @@ export default function App() {
   );
 }
 
-// Use relative URLs during local development so that the Vite proxy handles it correctly,
-// but use VITE_API_URL in production (e.g. Netlify) if configured
-const isDev = import.meta.env.DEV;
-const API_BASE_URL = isDev ? "" : (import.meta.env.VITE_API_URL || "");
+// API base URL will be relative for both dev and prod so we hit the same domain
+const API_BASE_URL = "";
 
 async function fetchApi(endpoint: string, options?: RequestInit) {
   const url = `${API_BASE_URL}${endpoint}`;
