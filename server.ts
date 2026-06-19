@@ -59,7 +59,7 @@ const PORT = 3000;
 const APP_URL_RAW =
   process.env.VITE_APP_URL ||
   process.env.APP_URL ||
-  "https://ais-pre-atahj527b5qohuebbpbkkt-963220536272.asia-southeast1.run.app";
+  "https://royshare.netlify.app";
 
 const APP_URL = APP_URL_RAW.replace(/\/+$/, "").replace(/^http:\/\//i, "https://");
 const isDevSpace = APP_URL.includes("ais-dev-");
