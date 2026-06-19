@@ -311,11 +311,13 @@ const API_BASE_URL = "";
 
 async function fetchApi(endpoint: string, options?: RequestInit) {
   const url = `${API_BASE_URL}${endpoint}`;
-  console.log(`[API Request] Calling exact endpoint: ${url}`);
   let res;
   try {
     res = await fetch(url, options);
   } catch (err: any) {
+    if (err.message && err.message.toLowerCase().includes("failed to fetch")) {
+       return new Response(JSON.stringify({ error: "Network error" }), { status: 503, headers: {'Content-Type': 'application/json'}});
+    }
     console.error(`[API Error] fetch() dashed on ${url}:`, err);
     throw new Error(`Failed to fetch from ${url}: ${err.message}`);
   }
@@ -323,6 +325,9 @@ async function fetchApi(endpoint: string, options?: RequestInit) {
   const contentType = res.headers.get("content-type");
   if (contentType && contentType.includes("text/html")) {
     const text = await res.text();
+    if (text.includes("Starting Server")) {
+       return new Response(JSON.stringify({ error: "Server start" }), { status: 503, headers: {'Content-Type': 'application/json'}});
+    }
     console.error(`[API Error] Received HTML from ${url}`, text.substring(0, 200));
     throw new Error(`Endpoint ${url} returned HTML instead of JSON. Expected JSON API.`);
   }

@@ -16,7 +16,6 @@ import {
   restQueryUserId,
   restQueryAll,
 } from "./src/lib/firestore-rest";
-import { Readable } from "stream";
 
 export const perfStorage = new AsyncLocalStorage<any>();
 
@@ -544,6 +543,17 @@ app.get("/api/debug/file/:fileId", async (req, res) => {
   }
 });
 
+app.get("/api/test-filelink/:fileId", async (req, res) => {
+  try {
+    const data = await restGetDoc("files", req.params.fileId);
+    if (!data || !data.telegramFileId) return res.send("No file ID");
+    const link = await bot!.telegram.getFileLink(data.telegramFileId);
+    res.json({ link: link.href });
+  } catch (e: any) {
+    res.json({ error: e.message });
+  }
+});
+
 // Download Redirection
 app.get("/api/file/:fileId/download", async (req, res) => {
   let isHeadersSent = false;
@@ -626,8 +636,22 @@ app.get("/api/file/:fileId/download", async (req, res) => {
       }, 0);
     }
 
-    // Redirect to Telegram Bot to send the large file using telegramFileId
-    return res.redirect(`https://t.me/${botUsername}?start=dl_${fileId}`);
+    // Download the file stream and pipe it to the client to preserve the original filename and hide the telegram endpoint
+    try {
+      const link = await bot.telegram.getFileLink(telegramFileId);
+      const response = await fetch(link.href);
+      if (!response.ok) throw new Error("Failed to fetch from Telegram");
+      
+      res.setHeader('Content-Disposition', `attachment; filename="${data.fileName || 'download'}"`);
+      res.setHeader('Content-Type', response.headers.get('content-type') || 'application/octet-stream');
+      
+      const buffer = await response.arrayBuffer();
+      res.send(Buffer.from(buffer));
+      return;
+    } catch (e: any) {
+      console.error("Error getting file link:", e);
+      return res.status(500).json({ success: false, error: "Failed to generate direct download link. File might be too large for direct download.", details: e.message, stack: e.stack });
+    }
     
   } catch (err: any) {
     if (!res.headersSent && !isHeadersSent) {
@@ -1437,7 +1461,7 @@ app.get(["/file/:fileId", "/api/public_file/:fileId"], async (req, res) => {
        const btnContainer = document.getElementById('s4-final-timer');
        btnContainer.innerHTML = '<div class="flex items-center text-white font-black text-2xl gap-3 justify-center w-full"><i data-lucide="check-circle" class="w-8 h-8 text-green-400"></i> Download Started</span>';
        lucide.createIcons();
-       const downloadUrl = '/api/file/${fileId}/download?verified=true&token=' + encodeURIComponent(antiAbuseToken);
+       const downloadUrl = \`/api/file/${fileId}/download?verified=true&token=\` + encodeURIComponent(antiAbuseToken);
        window.location.href = downloadUrl;
     }
     
@@ -3827,9 +3851,6 @@ async function initializeBotFromFirestore() {
 }
 
 async function startServer() {
-  await initializeBotFromFirestore();
-  startConfigWatcher();
-
   // Catch unhandled API routes and return JSON instead of HTML
   app.all("/api/*", (req, res) => {
     res.status(404).json({ error: `API route not found: ${req.method} ${req.originalUrl}` });
@@ -3854,11 +3875,19 @@ async function startServer() {
   app.listen(PORT, "0.0.0.0", () => {
     console.log(`Server running on http://localhost:${PORT}`);
   });
+
+  // Load bot asynchronously so it doesn't block binding the port
+  initializeBotFromFirestore().then(() => {
+    startConfigWatcher();
+  }).catch(err => {
+    console.error("Failed to initialize bot at startup:", err);
+  });
 }
 
 if (!isServerlessMode) {
   startServer();
 } else {
+
   // In Netlify, we just need to ensure bot is initialized before the first request if possible,
   // but it's better to catch all API routes
   app.all("/api/*", (req, res, next) => {
