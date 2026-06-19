@@ -897,7 +897,7 @@ function getAdHTML(label: string): string {
   return renderAdsForPlacement(label);
 }
 
-app.get("/file/:fileId", async (req, res) => {
+app.get(["/file/:fileId", "/api/public_file/:fileId"], async (req, res) => {
   const fileId = req.params.fileId;
   try {
     const data = await restGetDoc("files", fileId);
