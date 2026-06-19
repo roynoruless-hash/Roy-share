@@ -9,9 +9,13 @@ const httpAgent = new http.Agent({ keepAlive: true });
 const httpsAgent = new https.Agent({ keepAlive: true });
 const apiClient = axios.create({ httpAgent, httpsAgent });
 
-const dbId = config.firestoreDatabaseId === '(default)' ? '(default)' : config.firestoreDatabaseId;
-const baseUrl = `https://firestore.googleapis.com/v1/projects/${config.projectId}/databases/${dbId}/documents`;
-const key = `?key=${config.apiKey}`;
+const dbId = process.env.FIREBASE_DATABASE_ID || (config.firestoreDatabaseId === '(default)' ? '(default)' : config.firestoreDatabaseId);
+const projectId = process.env.FIREBASE_PROJECT_ID || config.projectId;
+const apiKey = process.env.FIREBASE_API_KEY || config.apiKey;
+
+const baseUrl = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/${dbId}/documents`;
+const key = `?key=${apiKey}`;
+
 
 // Helper mapping
 const toFirestoreType = (value: any): any => {

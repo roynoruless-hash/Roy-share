@@ -2075,20 +2075,17 @@ app.get("/api/admin/diagnose", requireAdmin, async (req, res) => {
   });
 });
 
-app.get("/api/admin/audit", requireAdmin, async (req, res) => {
+app.all("/api/admin/audit", requireAdmin, async (req, res) => {
   if (!bot || !currentBotToken) {
-    return res.status(400).json({ error: "Bot not initialized." });
+    return res.status(400).json({ ok: false, error: "Bot not initialized." });
   }
   try {
     const me = await bot.telegram.getMe();
     const webhookInfo = await bot.telegram.getWebhookInfo();
 
-    let testMessageResult = null;
-    // Removed auto-reply to ownerChatId per user request.
-
-    res.json({ me, webhookInfo, testMessageResult });
+    res.json({ ok: true, bot: me, webhook: webhookInfo });
   } catch (error: any) {
-    res.status(500).json({ error: error.description || error.message });
+    res.status(500).json({ ok: false, error: error.description || error.message });
   }
 });
 
@@ -3502,50 +3499,67 @@ File Size: ${(fileSize / 1024 / 1024).toFixed(2)} MB`);
       }
     });
 
-    // Revert to Long Polling mode because AI Studio preview proxy blocks webhooks
-    console.log("SERVER SETUP: Deleting webhook and starting long polling mode...");
-    try {
-      await newBot.telegram.deleteWebhook({ drop_pending_updates: true });
-      console.log("SERVER SETUP: Telegram webhook successfully deleted/disabled.");
-    } catch (e: any) {
-      console.error("SERVER SETUP: Error deleting webhook:", e.message || e);
-    }
-
-    let launchAttempts = 0;
-    const attemptLaunch = async () => {
+    // Use Webhooks if VITE_API_URL is set (Cloud Run), otherwise use Polling (Local/AI Studio)
+    const backendUrl = process.env.VITE_API_URL;
+    if (backendUrl) {
+      console.log(`SERVER SETUP: VITE_API_URL detected (${backendUrl}). Configuring webhook...`);
+      const webhookEndpoint = `${backendUrl}/api/telegram-webhook`;
       try {
-        console.log("SERVER SETUP: Launching bot update polling...");
-        // Launch in background so the promise doesn't block the startup sequence
-        newBot.launch({ dropPendingUpdates: true })
-          .then(() => {
-            console.log("SERVER SETUP: Bot long polling stopped.");
-          })
-          .catch((err: any) => {
-            const msg = err.message || String(err);
-            if (msg.includes("terminated by other getUpdates") || msg.includes("terminated by setWebhook")) {
-               console.log("SERVER SETUP: Polling conflict detected. Yielding to other instance.");
-               telegramApiStatus = "conflict (polling yielded)";
-               return;
-            }
-            console.error(`SERVER SETUP: Background polling error:`, msg);
-            lastTelegramError = msg;
-          });
-        console.log("SERVER SETUP: Bot long polling launched successfully.");
+        await newBot.telegram.setWebhook(webhookEndpoint, { drop_pending_updates: true });
+        console.log(`SERVER SETUP: Webhook successfully set to ${webhookEndpoint}`);
         telegramApiStatus = "online";
-      } catch (err: any) {
-        const msg = err.message || String(err);
-        console.error(`SERVER SETUP: Failed to launch polling (attempt ${launchAttempts + 1}):`, msg);
-        if (launchAttempts < 5) {
-          launchAttempts++;
-          console.log("SERVER SETUP: Retrying launch in 5 seconds...");
-          setTimeout(attemptLaunch, 5000);
-        } else {
-          logError(`Failed to launch polling after 5 attempts: ` + msg);
-        }
+        console.log(`Telegram Bot Ready for ${botUsername || 'Bot'} (Webhook Mode)`);
+      } catch (e: any) {
+        console.error("SERVER SETUP: Error setting webhook:", e.message || e);
+        lastTelegramError = e.message || e;
+        telegramApiStatus = "error";
       }
-    };
-    attemptLaunch();
-    console.log(`Telegram Bot Ready for ${botUsername || 'Bot'} (Long Polling Mode)`);
+    } else {
+      // Revert to Long Polling mode because AI Studio preview proxy blocks webhooks
+      console.log("SERVER SETUP: Deleting webhook and starting long polling mode...");
+      try {
+        await newBot.telegram.deleteWebhook({ drop_pending_updates: true });
+        console.log("SERVER SETUP: Telegram webhook successfully deleted/disabled.");
+      } catch (e: any) {
+        console.error("SERVER SETUP: Error deleting webhook:", e.message || e);
+      }
+  
+      let launchAttempts = 0;
+      const attemptLaunch = async () => {
+        try {
+          console.log("SERVER SETUP: Launching bot update polling...");
+          // Launch in background so the promise doesn't block the startup sequence
+          newBot.launch({ dropPendingUpdates: true })
+            .then(() => {
+              console.log("SERVER SETUP: Bot long polling stopped.");
+            })
+            .catch((err: any) => {
+              const msg = err.message || String(err);
+              if (msg.includes("terminated by other getUpdates") || msg.includes("terminated by setWebhook")) {
+                 console.log("SERVER SETUP: Polling conflict detected. Yielding to other instance.");
+                 telegramApiStatus = "conflict (polling yielded)";
+                 return;
+              }
+              console.error(`SERVER SETUP: Background polling error:`, msg);
+              lastTelegramError = msg;
+            });
+          console.log("SERVER SETUP: Bot long polling launched successfully.");
+          telegramApiStatus = "online";
+        } catch (err: any) {
+          const msg = err.message || String(err);
+          console.error(`SERVER SETUP: Failed to launch polling (attempt ${launchAttempts + 1}):`, msg);
+          if (launchAttempts < 5) {
+            launchAttempts++;
+            console.log("SERVER SETUP: Retrying launch in 5 seconds...");
+            setTimeout(attemptLaunch, 5000);
+          } else {
+            logError(`Failed to launch polling after 5 attempts: ` + msg);
+          }
+        }
+      };
+      attemptLaunch();
+      console.log(`Telegram Bot Ready for ${botUsername || 'Bot'} (Long Polling Mode)`);
+    }
 
     // Fetch bot metadata
     try {
