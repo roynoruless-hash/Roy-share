@@ -26,6 +26,8 @@ const pendingUploads = new Map<
     fileSize: number;
     messageId?: number;
     fileType?: string;
+    fileUniqueId?: string;
+    mimeType?: string;
     step?: string;
   }
 >();
@@ -1888,6 +1890,9 @@ app.get("/api/admin/status", async (req, res) => {
 });
 
 app.get("/api/admin/config", requireAdmin, async (req, res) => {
+  res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+  res.setHeader("Pragma", "no-cache");
+  res.setHeader("Expires", "0");
   try {
     const dbId = firebaseConfig.firestoreDatabaseId || "(default)";
     const url = `https://firestore.googleapis.com/v1/projects/${firebaseConfig.projectId}/databases/${dbId}/documents/settings/telegram_config?key=${firebaseConfig.apiKey}`;

@@ -15,6 +15,7 @@ import {
   RefreshCcw,
   LogOut,
   CheckCircle2,
+  AlertTriangle,
   XCircle,
   Search,
   Users,
@@ -203,6 +204,7 @@ export default function App() {
         user={user}
         onLogout={handleLogout}
         setErrorMsg={setErrorMsg}
+        errorMsg={errorMsg}
       />
     );
   }
@@ -308,10 +310,12 @@ function AdminDashboard({
   user,
   onLogout,
   setErrorMsg,
+  errorMsg,
 }: {
   user: User;
   onLogout: () => void;
   setErrorMsg: (msg: string) => void;
+  errorMsg: string;
 }) {
   const [botConfig, setBotConfig] = useState({
     botToken: "",
@@ -363,7 +367,12 @@ function AdminDashboard({
       try {
         const token = user ? await user.getIdToken() : "";
         const res = await fetch("/api/admin/config", {
-          headers: { Authorization: `Bearer ${token}` },
+          headers: { 
+            Authorization: `Bearer ${token}`,
+            "Cache-Control": "no-cache",
+            Pragma: "no-cache"
+          },
+          cache: "no-store"
         });
 
         if (!res.ok) {
@@ -471,12 +480,14 @@ function AdminDashboard({
       : botConfig;
     const retries = 3;
 
+    console.log("handleSave triggered");
     setSaving(true);
     setSaveSuccess(false);
     setErrorMsg("");
 
     for (let i = 0; i < retries; i++) {
       try {
+        console.log("Preparing config to save...");
         const configToSave = {
           botToken: actualConfig.botToken || "",
           ownerChatId: actualConfig.ownerChatId || "",
@@ -494,37 +505,50 @@ function AdminDashboard({
           updatedAt: new Date().toISOString(),
         };
 
-        console.log(`Saving config via backend API (attempt ${i + 1})...`);
+        console.log(`Saving config to Firestore directly (attempt ${i + 1})...`);
+
+        if (!user) {
+          throw new Error("User is not authenticated (user is null)");
+        }
+
+        try {
+          // Write directly to Firestore to bypass Netlify routing issues
+          await setDoc(doc(db, "settings", "telegram_config"), configToSave, { merge: true });
+          console.log("Firestore client write success.");
+        } catch (dbErr: any) {
+          console.error("Firestore DB Write Error:", dbErr);
+          throw new Error(`Firestore Error: ${dbErr.message}`);
+        }
 
         const token = await user.getIdToken();
-        const res = await fetch("/api/admin/save-config", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify(configToSave),
-        });
-
-        const contentType = res.headers.get("content-type");
-        if (contentType && contentType.includes("text/html")) {
-          throw new Error("Received HTML. API proxy is misconfigured or missing.");
+        // Fire-and-forget sync for backend process (if it is alive)
+        try {
+          fetch("/api/admin/config/sync_mem", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify(configToSave),
+          }).catch((err) => console.log("Backend offline or inaccessible, skipped memory sync.", err));
+        } catch (e) {
+          // ignore
         }
 
-        if (!res.ok) {
-          const errText = await res.text();
-          throw new Error(errText);
-        }
-
-        console.log("Save config API success.");
+        console.log("Save config finished successfully.");
 
         setSaveSuccess(true);
         setInitialBotConfig(configToSave);
         setIsDirty(false);
-        setTimeout(() => setSaveSuccess(false), 3000);
         setSaving(false);
-        // Reload config from backend to ensure data consistency
-        await fetchConfig(1);
+        setTimeout(() => setSaveSuccess(false), 3000);
+        
+        // Reload config without disturbing the state loop
+        try {
+            await fetchConfig(1);
+        } catch(e) {
+            console.log("fetchConfig reload failed silently");
+        }
         return;
       } catch (err: any) {
         console.error(`Save config error (attempt ${i + 1}):`, err);
@@ -655,9 +679,10 @@ function AdminDashboard({
                   <input
                     type="password"
                     value={botConfig.botToken || ""}
-                    onChange={(e) =>
-                      setBotConfig((p) => ({ ...p, botToken: e.target.value }))
-                    }
+                    onChange={(e) => {
+                      setBotConfig((p) => ({ ...p, botToken: e.target.value }));
+                      setIsDirty(true);
+                    }}
                     className="w-full border border-gray-300 rounded-lg p-2.5 outline-none focus:ring-2 focus:ring-blue-500 text-sm font-mono"
                     placeholder="123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11"
                   />
@@ -670,12 +695,13 @@ function AdminDashboard({
                   <input
                     type="text"
                     value={botConfig.ownerChatId || ""}
-                    onChange={(e) =>
+                    onChange={(e) => {
                       setBotConfig((p) => ({
                         ...p,
                         ownerChatId: e.target.value,
-                      }))
-                    }
+                      }));
+                      setIsDirty(true);
+                    }}
                     className="w-full border border-gray-300 rounded-lg p-2.5 outline-none focus:ring-2 focus:ring-blue-500 text-sm font-mono"
                     placeholder="e.g. 123456789"
                   />
@@ -689,12 +715,13 @@ function AdminDashboard({
                     <input
                       type="text"
                       value={botConfig.requiredChannel || ""}
-                      onChange={(e) =>
+                      onChange={(e) => {
                         setBotConfig((p) => ({
                           ...p,
                           requiredChannel: e.target.value,
-                        }))
-                      }
+                        }));
+                        setIsDirty(true);
+                      }}
                       className="w-full border border-gray-300 rounded-lg p-2.5 outline-none focus:ring-2 focus:ring-blue-500 text-sm"
                       placeholder="@channelusername"
                     />
@@ -706,12 +733,13 @@ function AdminDashboard({
                     <input
                       type="text"
                       value={botConfig.requiredGroup || ""}
-                      onChange={(e) =>
+                      onChange={(e) => {
                         setBotConfig((p) => ({
                           ...p,
                           requiredGroup: e.target.value,
-                        }))
-                      }
+                        }));
+                        setIsDirty(true);
+                      }}
                       className="w-full border border-gray-300 rounded-lg p-2.5 outline-none focus:ring-2 focus:ring-blue-500 text-sm"
                       placeholder="@groupusername"
                     />
@@ -724,12 +752,13 @@ function AdminDashboard({
                     <input
                       type="text"
                       value={botConfig.storageChannel || ""}
-                      onChange={(e) =>
+                      onChange={(e) => {
                         setBotConfig((p) => ({
                           ...p,
                           storageChannel: e.target.value,
-                        }))
-                      }
+                        }));
+                        setIsDirty(true);
+                      }}
                       className="w-full border border-gray-300 rounded-lg p-2.5 outline-none focus:ring-2 focus:ring-blue-500 text-sm"
                       placeholder="-100..."
                     />
@@ -745,12 +774,13 @@ function AdminDashboard({
                     min="0"
                     max="100"
                     value={botConfig.referralCommissionRate || ""}
-                    onChange={(e) =>
+                    onChange={(e) => {
                       setBotConfig((p) => ({
                         ...p,
                         referralCommissionRate: e.target.value,
-                      }))
-                    }
+                      }));
+                      setIsDirty(true);
+                    }}
                     className="w-full border border-gray-300 rounded-lg p-2.5 outline-none focus:ring-2 focus:ring-blue-500 text-sm"
                     placeholder="10"
                   />
@@ -763,12 +793,19 @@ function AdminDashboard({
                     handleSave();
                   }}
                   className="mt-4 bg-blue-600 hover:bg-blue-700 text-white px-6 py-2.5 rounded-lg font-medium transition flex items-center justify-center w-full md:w-auto"
+                  disabled={saving}
                 >
                   {saving ? "Saving..." : "Save Configuration"}
                 </button>
                 {saveSuccess && (
                   <p className="text-green-600 text-sm mt-2 flex items-center gap-1">
                     <CheckCircle2 className="w-4 h-4" /> Saved successfully.
+                  </p>
+                )}
+                {errorMsg && (
+                  <p className="text-red-500 text-sm mt-2 flex items-start gap-1 p-3 bg-red-50 rounded-lg border border-red-100">
+                    <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" /> 
+                    <span className="break-all">{errorMsg}</span>
                   </p>
                 )}
               </div>
