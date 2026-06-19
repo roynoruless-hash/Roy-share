@@ -3809,6 +3809,11 @@ async function startServer() {
   await initializeBotFromFirestore();
   startConfigWatcher();
 
+  // Catch unhandled API routes and return JSON instead of HTML
+  app.all("/api/*", (req, res) => {
+    res.status(404).json({ error: `API route not found: ${req.method} ${req.originalUrl}` });
+  });
+
   // Vite middleware for development
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({

@@ -365,26 +365,21 @@ function AdminDashboard({
     setLoadingConfig(true);
     for (let i = 0; i < retries; i++) {
       try {
-        const token = user ? await user.getIdToken() : "";
-        const res = await fetch("/api/admin/config", {
-          headers: { 
-            Authorization: `Bearer ${token}`,
-            "Cache-Control": "no-cache",
-            Pragma: "no-cache"
-          },
-          cache: "no-store"
-        });
-
-        if (!res.ok) {
-          throw new Error(await res.text());
+        if (!user) {
+          throw new Error("User not authenticated.");
         }
         
-        const contentType = res.headers.get("content-type");
-        if (contentType && contentType.includes("text/html")) {
-          throw new Error("Received HTML. API proxy is misconfigured or missing.");
+        let data: any = {};
+        try {
+          const docSnap = await getDoc(doc(db, "settings", "telegram_config"));
+          if (docSnap.exists()) {
+            data = docSnap.data();
+          }
+        } catch (dbErr: any) {
+          console.error("Firestore read error:", dbErr);
+          throw new Error("Firestore read failed: " + dbErr.message);
         }
 
-        const data = await res.json();
         setBotConfig({
           botToken: data.botToken || "",
           ownerChatId: data.ownerChatId || "",
@@ -417,7 +412,7 @@ function AdminDashboard({
       } catch (err: any) {
         if (err.message !== "Failed to fetch") {
           console.error(
-            `Attempt ${i + 1} failed to load config from Backend`,
+            `Attempt ${i + 1} failed to load config from Firestore`,
             err,
           );
         }
@@ -505,7 +500,7 @@ function AdminDashboard({
           updatedAt: new Date().toISOString(),
         };
 
-        console.log(`Saving config to Firestore directly (attempt ${i + 1})...`);
+        console.log(`Endpoint called: Firestore DB: settings/telegram_config (attempt ${i + 1})...`);
 
         if (!user) {
           throw new Error("User is not authenticated (user is null)");
