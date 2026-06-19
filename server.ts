@@ -591,39 +591,138 @@ app.get("/api/file/:fileId/download", async (req, res) => {
     if (uploaderId && verified && token) {
       setTimeout(async () => {
          try {
-            const clientIp = req.headers["x-forwarded-for"]?.toString().split(",")[0] || req.socket.remoteAddress || "unknown";
-            let refDoc = (await restGetDoc("referrals", uploaderId)) || {
-              totalValidDownloads: 0, totalRewardsEarned: 0, pendingVerification: 0, fraudDownloadsRemoved: 0, downloadIps: "{}"
-            };
-
-            const ipMap = JSON.parse(refDoc.downloadIps || "{}");
-            if (ipMap[clientIp]) {
-              refDoc.fraudDownloadsRemoved = (refDoc.fraudDownloadsRemoved || 0) + 1;
-            } else {
-              ipMap[clientIp] = true;
-              refDoc.downloadIps = JSON.stringify(ipMap);
-              refDoc.totalValidDownloads = (refDoc.totalValidDownloads || 0) + 1;
-              if (refDoc.totalValidDownloads % 10 === 0) {
-                refDoc.totalRewardsEarned = (refDoc.totalRewardsEarned || 0) + 1;
-                try {
-                  const fin = await restGetDoc("financials", uploaderId);
-                  if (fin) {
-                    fin.balance = (fin.balance || 0) + 1;
-                    await restSetDoc("financials", uploaderId, fin);
-                    if (bot && currentBotToken) {
-                      try { await bot.telegram.sendMessage(uploaderId, `🎉 *Reward Credited*\n\n10 Valid Downloads Completed\nReward Added: ₹1\nCurrent Balance: ₹${fin.balance.toFixed(2)}`, { parse_mode: "Markdown" }); } catch (e) {}
-                    }
-                  }
-                } catch (finErr) {}
-              }
+            const clientIpRaw = req.headers["x-forwarded-for"]?.toString().split(",")[0] || req.socket.remoteAddress || "unknown";
+            const userAgentRaw = req.headers["user-agent"] || "";
+            const crypto = require("crypto");
+            const ipHash = crypto.createHash("sha256").update(clientIpRaw).digest("hex");
+            const fpHash = crypto.createHash("sha256").update(clientIpRaw + userAgentRaw).digest("hex");
+            
+            // Extract downloaderId from cookies or use fpHash
+            let downloaderId = "anonymous_" + fpHash.substring(0, 10);
+            if (req.headers.cookie) {
+               const match = req.headers.cookie.match(/downloaderId=([^;]+)/);
+               if (match) downloaderId = match[1];
             }
-            await restSetDoc("referrals", uploaderId, refDoc);
-         } catch(e) {}
+            if (req.query.downloaderId) {
+                downloaderId = String(req.query.downloaderId);
+            }
+
+            const country = (req.headers["cf-ipcountry"] || req.headers["x-appengine-country"] || "Unknown").toString();
+            const vpnDetected = false; 
+            
+            let isFraud = false;
+            let fraudReason = "";
+            let fraudRule = "";
+            
+            const userAgentLower = userAgentRaw.toLowerCase();
+            if (userAgentLower.includes("bot") || userAgentLower.includes("spider") || userAgentLower.includes("headless") || userAgentLower.includes("http")) {
+                isFraud = true;
+                fraudReason = "Bot traffic detected";
+                fraudRule = "BOT_TRAFFIC";
+            }
+            
+            const dsRef = `dl_${Date.now()}_${Math.random().toString(36).substring(2)}`;
+            const dlLog = {
+                id: dsRef, 
+                fileId, 
+                uploaderId, 
+                downloaderId,
+                ipHash, 
+                deviceFingerprintHash: fpHash,
+                userAgent: userAgentRaw,
+                country,
+                vpnDetected,
+                timestamp: Date.now(),
+                status: isFraud ? "rejected" : "pending", 
+                reason: fraudReason, 
+                rule: fraudRule,
+                amount: 0.05
+            };
+            
+            if (!isFraud) {
+                const uploaderMeta = await restGetDoc("users_meta", uploaderId);
+                const uploaderIPs = uploaderMeta?.knownIps || []; 
+                if (downloaderId === uploaderId || uploaderIPs.includes(ipHash)) {
+                    dlLog.status = "rejected"; 
+                    dlLog.reason = "Uploader downloaded own file";
+                    dlLog.rule = "SELF_DOWNLOAD";
+                    isFraud = true;
+                }
+            }
+
+            if (!isFraud) {
+                const pastLogs = await restQueryUserId("download_logs", uploaderId, "uploaderId");
+                const sameFileDownloads = pastLogs.filter((d: any) => 
+                    d.fileId === fileId && 
+                    (d.deviceFingerprintHash === fpHash || d.ipHash === ipHash || d.downloaderId === downloaderId)
+                ).sort((a: any, b: any) => b.timestamp - a.timestamp);
+                
+                if (sameFileDownloads.length > 0) {
+                    const lastDl = sameFileDownloads[0];
+                    if (Date.now() - lastDl.timestamp < 1000 * 60 * 60 * 24) { 
+                        dlLog.status = "rejected"; 
+                        dlLog.reason = "Same user downloaded this file within 24 hours";
+                        dlLog.rule = "COOLDOWN_ACTIVE";
+                        isFraud = true;
+                    } else {
+                        dlLog.status = "rejected"; 
+                        dlLog.reason = "Duplicate download of the same file";
+                        dlLog.rule = "DUPLICATE_DOWNLOAD";
+                        isFraud = true;
+                    }
+                }
+                
+                if (!isFraud) {
+                    const recentIPActivity = pastLogs.filter((d: any) => 
+                        d.ipHash === ipHash && (Date.now() - d.timestamp < 1000 * 60 * 60)
+                    );
+                    if (recentIPActivity.length > 10) {
+                        dlLog.status = "rejected"; 
+                        dlLog.reason = "Too many downloads in a short time";
+                        dlLog.rule = "SUSPICIOUS_ACTIVITY";
+                        isFraud = true;
+                    }
+                }
+            }
+            
+            await restSetDoc("download_logs", dsRef, dlLog);
+            
+            if (dlLog.status === "pending") {
+                const userMeta = await restGetDoc("users_meta", uploaderId) || {};
+                userMeta.pendingBalance = (userMeta.pendingBalance || 0) + 0.05;
+                await restSetDoc("users_meta", uploaderId, userMeta);
+            }
+
+            const clientIp = clientIpRaw;
+             let refDoc = (await restGetDoc("referrals", uploaderId)) || {
+               totalValidDownloads: 0, totalRewardsEarned: 0, pendingVerification: 0, fraudDownloadsRemoved: 0, downloadIps: "{}"
+             };
+             if (dlLog.status === "rejected") {
+                 refDoc.fraudDownloadsRemoved = (refDoc.fraudDownloadsRemoved || 0) + 1;
+             } else {
+                 refDoc.totalValidDownloads = (refDoc.totalValidDownloads || 0) + 1;
+                 if (refDoc.totalValidDownloads % 10 === 0) {
+                     refDoc.totalRewardsEarned = (refDoc.totalRewardsEarned || 0) + 1;
+                     // Only updating meta, because real balance is dynamic now
+                     try {
+                       const fin = await restGetDoc("financials", uploaderId) || {};
+                       fin.balance = (fin.balance || 0) + 1;
+                       await restSetDoc("financials", uploaderId, fin);
+                       if (bot && currentBotToken) {
+                         try { await bot.telegram.sendMessage(uploaderId, `🎉 *Reward Credited*\n\n10 Valid Downloads Completed\nReward Added: ₹1\nNote: Available in Withdrawable Balance.`, { parse_mode: "Markdown" }); } catch (e) {}
+                       }
+                     } catch (finErr) {}
+                 }
+                 const ipMap = JSON.parse(refDoc.downloadIps || "{}");
+                 ipMap[clientIpRaw] = true;
+                 refDoc.downloadIps = JSON.stringify(ipMap);
+             }
+             await restSetDoc("referrals", uploaderId, refDoc);
+          } catch(e) {}
          
          try {
              const downloadsCount = (data.downloads !== undefined ? data.downloads : data.downloadCount || 0) + 1;
-             const earningsAmt = (data.earnings || 0) + 0.05;
-             await restSetDoc("files", fileId, { ...data, downloads: downloadsCount, earnings: earningsAmt });
+             await restSetDoc("files", fileId, { ...data, downloads: downloadsCount });
              
              const referredInfo = await restGetDoc("referred_users", uploaderId);
              if (referredInfo && referredInfo.status === "verified" && referredInfo.referrerId) {
@@ -706,197 +805,48 @@ function formatBytes(bytes: number, decimals = 2) {
 
 function renderGlobalAdScripts(): string {
   let html = "";
+  html += getAdHTML('popunder');
+  html += getAdHTML('push_notification');
+  html += getAdHTML('in_page_push');
+  html += getAdHTML('vignette');
+  html += getAdHTML('direct_link');
 
-  // 1. Social Bar Support
-  if (socialBarConfig && socialBarConfig.enabled && socialBarConfig.script) {
-    html += `<!-- Ads Social Bar -->\n<div class="ads-social-bar" style="display:none;">${socialBarConfig.script}</div>\n`;
+  // Legacy fallback
+  if (typeof socialBarConfig !== 'undefined' && socialBarConfig && socialBarConfig.enabled && socialBarConfig.script) {
+    html += `<!-- Legacy Ads Social Bar -->\n<div class="ads-social-bar" style="display:none;">${socialBarConfig.script}</div>\n`;
   }
-
-  // 2. Dedicated Popunder Script setup
-  if (popunderConfig && popunderConfig.enabled) {
-    // Find Popunder script code from premium ads list or general fallbacks
-    const popunderAds = Array.isArray(adsList) ? adsList.filter(a => a.enabled && a.type.toLowerCase().includes("popunder")) : [];
-    popunderAds.sort((a,b) => (b.priority || 0) - (a.priority || 0));
-    const activePopunderScript = popunderAds.length > 0 ? popunderAds[0].scriptCode : "";
-    const activePopId = popunderAds.length > 0 ? popunderAds[0].id : "global_popunder";
-
-    html += `
-    <!-- Popunder System -->
-    <script>
-      (function() {
-        try {
-          const isMobile = /Mobi|Android|iPhone/i.test(navigator.userAgent);
-          const deviceMode = "${popunderConfig.device || "all"}";
-          
-          if (deviceMode === "mobile" && !isMobile) return;
-          if (deviceMode === "desktop" && isMobile) return;
-
-          // Check frequency cap
-          if (${popunderConfig.oncePerSession === true}) {
-            if (sessionStorage.getItem('popunder_fired')) return;
-          }
-          if (${popunderConfig.oncePer24Hours === true}) {
-            const lastShown = localStorage.getItem('popunder_last_shown_time');
-            if (lastShown && (Date.now() - parseInt(lastShown, 10)) < 24 * 3600 * 1000) return;
-          }
-
-          // Trigger Popunder injection after delay
-          const delaySecs = parseInt("${popunderConfig.delay || 3}", 10);
-          setTimeout(function() {
-            console.log("Popunder armed with delay of " + delaySecs + "s");
-            
-            // Popunder display zone or trigger script
-            const injectorDiv = document.createElement("div");
-            injectorDiv.id = "popunder-zone-injector";
-            injectorDiv.style.display = "none";
-            injectorDiv.innerHTML = \`${activePopunderScript}\`;
-            document.body.appendChild(injectorDiv);
-
-            // Re-execute scripts inside injector
-            Array.from(injectorDiv.getElementsByTagName("script")).forEach(function(oldScr) {
-              const newScr = document.createElement("script");
-              Array.from(oldScr.attributes).forEach(attr => newScr.setAttribute(attr.name, attr.value));
-              newScr.appendChild(document.createTextNode(oldScr.innerHTML));
-              oldScr.parentNode.replaceChild(newScr, oldScr);
-            });
-
-            // Set localStorage or sessionStorage limits
-            if (${popunderConfig.oncePerSession === true}) {
-              sessionStorage.setItem('popunder_fired', 'true');
-            }
-            if (${popunderConfig.oncePer24Hours === true}) {
-              localStorage.setItem('popunder_last_shown_time', Date.now().toString());
-            }
-
-            // Track impression
-            fetch('/api/ads/track', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ adId: "${activePopId}", eventType: "impression" })
-            }).catch(e => {});
-
-          }, delaySecs * 1000);
-
-        } catch (ex) {
-          console.warn("Popunder execution fail safe: ", ex);
-        }
-      })();
-    </script>
-    `;
-  }
-
-  // 3. Direct Link system
-  const directLinkAds = Array.isArray(adsList) ? adsList.filter(a => a.enabled && a.type.toLowerCase().includes("direct")) : [];
-  directLinkAds.sort((a,b) => (b.priority || 0) - (a.priority || 0));
-
-  if (directLinkAds.length > 0 || (directLinkConfig && directLinkConfig.url)) {
-    const activeDirectLinkUrl = directLinkAds.length > 0 ? (directLinkAds[0].scriptCode.includes("http") ? directLinkAds[0].scriptCode : (directLinkConfig.url || "")) : (directLinkConfig.url || "");
-    const triggerEvent = directLinkConfig.trigger || "download_click";
-    const directLinkId = directLinkAds.length > 0 ? directLinkAds[0].id : "global_direct_link";
-
-    if (activeDirectLinkUrl) {
-      html += `
-      <!-- Direct Link Interceptor -->
-      <script>
-        (function() {
-          try {
-            const trigger = "${triggerEvent}";
-            const targetUrl = "${activeDirectLinkUrl}";
-            
-            function fireDirectLink() {
-              window.open(targetUrl, '_blank');
-              fetch('/api/ads/track', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ adId: "${directLinkId}", eventType: "click" })
-              }).catch(e => {});
-            }
-
-            window.addEventListener('load', function() {
-              if (trigger === "download_click") {
-                const dlBtn = document.getElementById("s4-final-timer") || document.getElementById("download-main-btn");
-                if (dlBtn) {
-                  dlBtn.addEventListener('click', fireDirectLink);
-                }
-              } else if (trigger === "upload_click") {
-                const upBtn = document.getElementById("upload-trigger-btn");
-                if (upBtn) {
-                  upBtn.addEventListener('click', fireDirectLink);
-                }
-              } else if (trigger === "button_click") {
-                document.querySelectorAll("button, a.btn").forEach(function(el) {
-                  el.addEventListener('click', function() {
-                    if (Math.random() < 0.35) {
-                      fireDirectLink();
-                    }
-                  });
-                });
-              } else {
-                document.body.addEventListener('click', function(e) {
-                  if (Math.random() < 0.20 && e.target.tagName !== 'INPUT' && e.target.tagName !== 'TEXTAREA') {
-                    fireDirectLink();
-                  }
-                }, { once: false });
-              }
-            });
-          } catch(ex) {
-            console.warn("Direct Link fail safe: ", ex);
-          }
-        })();
-      </script>
-      `;
-    }
-  }
-
-  // 4. Injected Script Code Errors sandboxing
-  html += `
-  <script>
-    window.addEventListener('error', function(e) {
-      if (e.filename && (e.filename.includes('monetag') || e.filename.includes('adsterra') || e.filename.includes('googlesyndication') || e.filename.includes('clickadu') || e.filename.includes('pop') || e.filename.includes('ads'))) {
-        console.warn('Isolating third-party ad script error:', e.message);
-        e.preventDefault();
-        e.stopPropagation();
-      }
-    }, true);
-  </script>
-  `;
-
   return html;
 }
 
 function renderAdsForPlacement(placementKey: string): string {
+  if (!Array.isArray(adsList)) return "";
+  const bgPlacements = ["popunder", "push_notification", "in_page_push", "vignette", "direct_link"];
+  const isBg = bgPlacements.includes(placementKey.toLowerCase());
+  
+  const matchedAds = adsList.filter(ad => {
+    if (!ad || !ad.enabled) return false;
+    return (ad.placement || "").toLowerCase() === placementKey.toLowerCase();
+  });
+
+  if (matchedAds.length === 0) return "";
+
+  matchedAds.sort((a, b) => (b.priority || 0) - (a.priority || 0));
+
   let html = "";
   
-  // Legacy single ad fallback
-  if (adsEnabled && adsScript && adsPosition) {
-    const pos = adsPosition.toLowerCase();
-    const pk = placementKey.toLowerCase();
-    let isLegacyMatch = false;
-    if (pos === "all") isLegacyMatch = true;
-    else if (pos === "top" && pk.includes("header")) isLegacyMatch = true;
-    else if (pos === "middle" && (pk.includes("middle") || pk.includes("details"))) isLegacyMatch = true;
-    else if (pos === "bottom" && pk.includes("footer")) isLegacyMatch = true;
-    else if (pos === "sidebar" && pk.includes("sidebar")) isLegacyMatch = true;
-    
-    if (isLegacyMatch) {
-      html += `<div class="ad-wrapper-legacy w-full flex justify-center my-4 overflow-hidden" style="min-height:90px">${adsScript}</div>`;
-    }
-  }
-
-  // Find dynamic ads designed for this specific placement
-  if (Array.isArray(adsList)) {
-    const matchedAds = adsList.filter(ad => {
-      if (!ad || !ad.enabled) return false;
-      const adPlacement = (ad.placement || "").toLowerCase().replace("_", "");
-      const k = placementKey.toLowerCase().replace("_", "");
-      return adPlacement === k || adPlacement.includes(k) || k.includes(adPlacement);
-    });
-
-    matchedAds.sort((a, b) => (b.priority || 0) - (a.priority || 0));
-
+  if (isBg) {
+     matchedAds.forEach(ad => {
+       html += "\n<!-- Background Ad Script: " + ad.name + " -->\n" + '<div style="display:none;">' + ad.scriptCode + '</div>' + "\n";
+     });
+  } else {
+    // Visible Box
+    html += `<div class="w-full my-6 flex flex-col items-center justify-center p-4 bg-gray-800/80 border border-gray-700/60 rounded-3xl shadow-lg relative overflow-hidden" style="min-height: 120px; text-align: center;">
+      <div class="absolute top-0 right-0 bg-gray-700/50 text-[10px] text-gray-400 font-bold px-2 py-0.5 rounded-bl-lg uppercase tracking-widest z-10">Advertisement</div>
+      <div class="w-full h-full flex flex-col justify-center items-center relative z-20">`;
+      
     matchedAds.forEach(ad => {
       html += `
-        <div class="ad-wrapper-dynamic" data-ad-id="${ad.id}" style="width: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; margin: 12px 0; overflow: hidden;" onclick="try { fetch('/api/ads/track', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ adId: '${ad.id}', eventType: 'click' }) }).catch(e => {}) } catch(e) {}">
+        <div class="ad-wrapper-dynamic w-full max-w-full overflow-hidden flex justify-center py-2" data-ad-id="${ad.id}">
           ${ad.scriptCode}
           <script>
             (function() {
@@ -912,6 +862,8 @@ function renderAdsForPlacement(placementKey: string): string {
         </div>
       `;
     });
+    
+    html += `</div></div>`;
   }
 
   return html;
@@ -921,10 +873,28 @@ function getAdHTML(label: string): string {
   return renderAdsForPlacement(label);
 }
 
+app.get("/file/preview", async (req, res, next) => {
+  // Pass a dummy file to the existing rendering logic
+  req.params.fileId = "preview";
+  next();
+});
+
 app.get(["/file/:fileId", "/api/public_file/:fileId"], async (req, res) => {
   const fileId = req.params.fileId;
   try {
-    const data = await restGetDoc("files", fileId);
+    let data;
+    if (fileId === "preview") {
+      data = {
+        fileName: "PREVIEW_FILE.zip",
+        mimeType: "application/zip",
+        fileSize: 1048576,
+        downloads: 0,
+        telegramFileId: "preview",
+        expiryDate: new Date(Date.now() + 86400000).toISOString()
+      };
+    } else {
+      data = await restGetDoc("files", fileId);
+    }
     if (!data) {
       return res
         .status(404)
@@ -991,7 +961,8 @@ app.get(["/file/:fileId", "/api/public_file/:fileId"], async (req, res) => {
     .ad-tall { min-height: 600px; }
   </style>
 </head>
-<body class="bg-gray-900 text-gray-100 flex flex-col relative overflow-x-hidden min-h-screen">
+<body class="bg-gray-900 text-gray-100 flex flex-col relative min-h-screen">
+  ${getAdHTML("header_banner")}
   
   <div id="fraud-overlay" class="hidden fixed inset-0 z-50 bg-gray-950 flex flex-col items-center justify-center p-6 text-center">
     <i data-lucide="alert-triangle" class="w-20 h-20 text-red-500 mb-6"></i>
@@ -1052,7 +1023,7 @@ app.get(["/file/:fileId", "/api/public_file/:fileId"], async (req, res) => {
 
       <!-- SIDE AD -->
       <div id="side-native-ad" class="hidden lg:flex w-full">
-         ${getAdHTML("before_security")}
+         ${getAdHTML("middle_banner")}
       </div>
     </aside>
 
@@ -1091,7 +1062,7 @@ app.get(["/file/:fileId", "/api/public_file/:fileId"], async (req, res) => {
       </div>
 
       <div id="middle-banner" class="w-full">
-         ${renderAd(adsConfig.bannerEnabled, adsConfig.bannerScript, "after_security", true)}
+         ${renderAd(adsConfig.bannerEnabled, adsConfig.bannerScript, "middle_banner", true)}
       </div>
 
       <!-- STEP CONTAINERS -->
@@ -1127,7 +1098,7 @@ app.get(["/file/:fileId", "/api/public_file/:fileId"], async (req, res) => {
                 <div class="h-px bg-gray-700 flex-1"></div>
             </div>
 
-            ${getAdHTML("before_download")}
+            ${getAdHTML("center_banner")}
             
             <div class="bg-gray-800 rounded-3xl p-8 w-full border border-gray-700 shadow-xl text-center">
                 <div id="s1-continue-timer" class="mb-6">
@@ -1178,7 +1149,7 @@ app.get(["/file/:fileId", "/api/public_file/:fileId"], async (req, res) => {
                 <div class="h-px bg-gray-700 flex-1"></div>
             </div>
 
-            ${getAdHTML("after_download")}
+            ${getAdHTML("center_banner")}
             
             <div class="bg-gray-800 rounded-3xl p-8 w-full border border-gray-700 shadow-xl text-center">
                 <div id="s2-continue-timer" class="mb-6">
@@ -1227,12 +1198,10 @@ app.get(["/file/:fileId", "/api/public_file/:fileId"], async (req, res) => {
              <p class="text-gray-400 font-mono text-sm break-all mb-10 bg-gray-900 p-4 rounded-xl border border-gray-700 inline-block">${data.fileName}</p>
              
              ${(() => {
-                 const b = getAdHTML("before_download");
-                 const a = getAdHTML("after_download");
-                 if (!b && !a) return '';
+                 const a = getAdHTML("center_banner");
+                 if (!a) return '';
                  return `<div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8 w-full">
-                    <div class="w-full flex justify-center">${b}</div>
-                    <div class="w-full flex justify-center">${a}</div>
+                    <div class="w-full flex justify-center col-span-1 md:col-span-2">${a}</div>
                  </div>`;
              })()}
              
@@ -1524,7 +1493,7 @@ app.get("/verify-withdraw", (req, res) => {
 </head>
 <body class="bg-gray-950 text-gray-100 flex flex-col min-h-screen items-center py-10 px-4">
   
-  \${getAdHTML("header_banner") || \`<div class="ad-placeholder" style="max-width: 728px; height: 90px;">header_banner</div>\`\}
+  \${getAdHTML("header_banner")}
   
   <div id="verify-card" class="bg-gray-800 rounded-3xl p-8 max-w-md w-full shadow-2xl border border-gray-700 text-center my-6">
     <div class="inline-flex items-center justify-center w-16 h-16 bg-blue-500/10 rounded-2xl mb-4">
@@ -1559,7 +1528,12 @@ app.get("/verify-withdraw", (req, res) => {
     <p class="text-gray-400 text-sm">Redirecting back to Telegram...</p>
   </div>
   
-  \${getAdHTML("footer_banner") || \`<div class="ad-placeholder" style="max-width: 300px; height: 250px;">footer_banner</div>\`\}
+  ${getAdHTML("footer_banner")}
+  ${getAdHTML("popunder")}
+  ${getAdHTML("push_notification")}
+  ${getAdHTML("in_page_push")}
+  ${getAdHTML("vignette")}
+  ${getAdHTML("direct_link")}
 
   <script>
     lucide.createIcons();
@@ -1811,6 +1785,7 @@ app.get("/api/admin/users", requireAdmin, async (req, res) => {
       const u = getUser(String(m.id));
       u.isBlocked = m.isBlocked || false;
       u.balanceAdjustment = m.balanceAdjustment || 0;
+      u.pendingBalance = m.pendingBalance || 0;
       if (m.username) u.username = m.username;
       if (m.name) u.name = m.name;
     });
@@ -1819,6 +1794,10 @@ app.get("/api/admin/users", requireAdmin, async (req, res) => {
     const usersList = Array.from(usersMap.values()).map(u => {
       u.totalEarnings = u.fileEarnings + u.referralEarnings + u.balanceAdjustment;
       u.currentBalance = u.totalEarnings - u.withdrawn - u.pendingWithdraw;
+      u.pendingBalance = u.pendingBalance || 0;
+      u.totalDownloads = u.totalDownloads || 0;
+      u.validDownloads = u.validDownloads || 0;
+      u.rejectedDownloads = u.rejectedDownloads || 0;
       return u;
     });
 
@@ -2587,7 +2566,46 @@ async function setupBot(token: string) {
       await verifyUserMembership(ctx, ctx.from.id);
     });
 
+    async function processHoldEarnings(userId: string) {
+       try {
+           const logs = await restQueryUserId("download_logs", userId, "uploaderId");
+           let newlyVerifiedAmount = 0;
+           let pendingReduced = 0;
+           const now = Date.now();
+           const twentyFourHrs = 24 * 60 * 60 * 1000;
+           
+           let changedLogs = [];
+           let filesMap = new Map();
+           
+           for (const log of logs) {
+               if (log.status === "pending" && (now - log.timestamp) >= twentyFourHrs) {
+                   log.status = "verified";
+                   changedLogs.push(log);
+                   newlyVerifiedAmount += log.amount;
+                   pendingReduced += log.amount;
+                   filesMap.set(log.fileId, (filesMap.get(log.fileId) || 0) + log.amount);
+               }
+           }
+           
+           if (changedLogs.length > 0) {
+               for (const log of changedLogs) { await restSetDoc("download_logs", log.id, log); }
+               for (const [fId, amt] of Array.from(filesMap.entries())) {
+                   const fData = await restGetDoc("files", fId);
+                   if (fData) {
+                       fData.earnings = (fData.earnings || 0) + amt;
+                       await restSetDoc("files", fId, fData);
+                   }
+               }
+               const uMeta = await restGetDoc("users_meta", userId) || {};
+               uMeta.pendingBalance = Math.max(0, (uMeta.pendingBalance || 0) - pendingReduced);
+               await restSetDoc("users_meta", userId, uMeta);
+               finCache.delete(userId);
+           }
+       } catch(e) {}
+    }
+
     async function getUserFinancials(userIdStr: string) {
+      await processHoldEarnings(userIdStr);
       console.log(`[DATABASE] Database query executed for user ${userIdStr}`);
       if (finCache.has(userIdStr)) {
           const cached = finCache.get(userIdStr)!;
@@ -2624,6 +2642,18 @@ async function setupBot(token: string) {
 
       const totalEarnings = fileEarnings + referralEarnings + manualAdjustments;
       const balance = totalEarnings - withdrawn - pendingWithdraw;
+      let pendingBalance = 0;
+      if (userDoc && userDoc.pendingBalance) pendingBalance = userDoc.pendingBalance;
+      
+      const allLogs = await restQueryUserId("download_logs", userIdStr, "uploaderId") || [];
+      let validDownloads = 0;
+      let rejectedDownloads = 0;
+      let totalDownloads = allLogs.length;
+      allLogs.forEach(l => {
+         if(l.status === 'verified') validDownloads++;
+         if(l.status === 'rejected') rejectedDownloads++;
+      });
+      
       const result = {
         fileEarnings,
         referralEarnings,
@@ -2632,6 +2662,10 @@ async function setupBot(token: string) {
         withdrawn,
         pendingWithdraw,
         balance,
+        pendingBalance,
+        validDownloads,
+        rejectedDownloads,
+        totalDownloads,
         withdrawals,
         files,
         userDoc
@@ -2677,7 +2711,16 @@ async function setupBot(token: string) {
           : ctx.from.first_name || "User";
         const safeUsername = username.replace(/([_*`\[])/g, "\\$1");
 
-        const accountMsg = `👤 *Account Page*\n\n*Telegram ID:* \`${ctx.from.id}\`\n*Username:* ${safeUsername}\n*Join Date:* ${joinDateStr}\n\n*Total Uploads:* ${totalUploads}\n*Total Downloads:* ${totalDownloads}\n*Total Earnings:* ₹${fin.totalEarnings.toFixed(2)}`;
+        const logs = await restQueryUserId("download_logs", userId, "uploaderId");
+        let validDls = 0;
+        let rejectedDls = 0;
+        logs.forEach(l => {
+           if(l.status === 'verified') validDls++;
+           if(l.status === 'rejected') rejectedDls++;
+        });
+        const fraudScore = totalDownloads > 0 ? Math.round((rejectedDls/totalDownloads)*100) : 0;
+        const fraudFlagStr = fraudScore > 30 ? `⚠️ High (${fraudScore}% rejection rate)` : "✅ Clean";
+        const accountMsg = `👤 *Account Page*\n\n*Telegram ID:* \`${ctx.from.id}\`\n*Username:* ${safeUsername}\n*Join Date:* ${joinDateStr}\n\n*Total Uploads:* ${totalUploads}\n*Total Downloads:* ${totalDownloads}\n*Valid Downloads:* ${validDls}\n*Rejected Downloads:* ${rejectedDls}\n*Fraud Flags:* ${fraudFlagStr}\n\n*Pending Earnings:* ₹${(fin.pendingBalance || 0).toFixed(2)}\n*Withdrawable Earnings:* ₹${fin.balance.toFixed(2)}\n*Total Lifetime Earnings:* ₹${fin.totalEarnings.toFixed(2)}`;
 
         await ctx.reply(accountMsg, { parse_mode: "Markdown" });
       } catch (err: any) {

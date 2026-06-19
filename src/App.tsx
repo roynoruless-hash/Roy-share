@@ -8,37 +8,7 @@ import {
   User,
 } from "firebase/auth";
 import { doc, getDoc, setDoc, onSnapshot } from "firebase/firestore";
-import {
-  ShieldAlert,
-  ShieldCheck,
-  Settings,
-  RefreshCcw,
-  LogOut,
-  CheckCircle2,
-  AlertTriangle,
-  XCircle,
-  Search,
-  Users,
-  Ban,
-  CheckCircle,
-  FileText,
-  Wallet,
-  ChevronDown,
-  ChevronUp,
-  Trash2,
-  Edit2,
-  Plus,
-  Copy,
-  BarChart2,
-  ExternalLink,
-  Globe,
-  Sliders,
-  Tv,
-  Zap,
-  Check,
-  Eye,
-  Info,
-} from "lucide-react";
+import { MoreVertical, Wallet, UserX, XCircle, RefreshCcw, Clock, Download, ArrowRight, Settings, Plus, Play, Pause, Save, LogOut, Loader2, Search, Zap, Shield, HelpCircle, BarChart3, Users, DollarSign, Eye, LineChart, FileText, Smartphone, Laptop, LayoutDashboard, Globe, MessageSquare, Menu, Activity, Send, File, RefreshCw, X, Gift, CheckCircle2, ChevronRight, Copy, ExternalLink, ShieldCheck, Mail, LogIn, ChevronDown, Trash2, ArrowUpRight, CreditCard, Link as LinkIcon, DownloadCloud, Ban, UploadCloud, AlertCircle, TrendingUp, AlertTriangle } from "lucide-react";
 import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
 
@@ -365,6 +335,8 @@ function AdminDashboard({
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [configDebug, setConfigDebug] = useState<any>(null);
   const [activeTab, setActiveTab] = useState<"dashboard" | "users" | "ads">("dashboard");
+  const [moreMenuOpen, setMoreMenuOpen] = useState(false);
+  const [activeModal, setActiveModal] = useState<"none" | "verification" | "withdrawals">("none");
 
   useEffect(() => {
     fetchStatus();
@@ -634,21 +606,87 @@ function AdminDashboard({
             </h1>
             <p className="text-gray-500 text-sm mt-1">{user.email}</p>
           </div>
-          <button
-            onClick={onLogout}
-            className="mt-4 md:mt-0 flex items-center gap-2 px-4 py-2 border border-gray-200 rounded-lg text-gray-600 hover:bg-gray-50 transition"
-          >
-            <LogOut className="w-4 h-4" />
-            Logout
-          </button>
+          <div className="mt-4 md:mt-0 flex items-center gap-3">
+            <div className="relative">
+              <button
+                onClick={() => setMoreMenuOpen(!moreMenuOpen)}
+                className="flex items-center justify-center p-2 border border-gray-200 rounded-lg text-gray-600 hover:bg-gray-50 transition"
+                title="More Options"
+              >
+                <MoreVertical className="w-5 h-5" />
+              </button>
+              {moreMenuOpen && (
+                <div className="absolute right-0 mt-2 w-64 bg-white rounded-xl shadow-lg border border-gray-100 z-50 overflow-hidden">
+                  <div className="py-2">
+                    <button
+                      onClick={() => { setActiveModal("verification"); setMoreMenuOpen(false); }}
+                      className="w-full text-left px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-3 transition"
+                    >
+                      <Shield className="w-4 h-4 text-orange-500" />
+                      Anti-Fraud Monitor
+                    </button>
+                    <button
+                      onClick={() => { setActiveModal("withdrawals"); setMoreMenuOpen(false); }}
+                      className="w-full text-left px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-3 transition"
+                    >
+                      <Wallet className="w-4 h-4 text-green-500" />
+                      Withdrawal Requests
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+            
+            <button
+              onClick={onLogout}
+              className="flex items-center gap-2 px-4 py-2 border border-gray-200 rounded-lg text-gray-600 hover:bg-gray-50 transition"
+            >
+              <LogOut className="w-4 h-4" />
+              Logout
+            </button>
+          </div>
         </header>
+
+        {/* Modal overlays for Admin details */}
+        {activeModal !== "none" && (
+          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex justify-end">
+            <div className="w-full max-w-2xl bg-gray-50 h-full overflow-y-auto shadow-2xl animate-in slide-in-from-right relative">
+              <div className="sticky top-0 bg-white border-b border-gray-100 p-4 flex justify-between items-center z-10 hidden md:flex">
+                <h2 className="text-lg font-bold">
+                  {activeModal === "verification" ? "Anti-Fraud Monitor" : "Withdrawal Requests"}
+                </h2>
+                <button
+                  onClick={() => setActiveModal("none")}
+                  className="p-2 rounded-full hover:bg-gray-100 text-gray-500 transition"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+              <div className="md:hidden sticky top-0 bg-white border-b border-gray-100 p-4 flex justify-between items-center z-10">
+                <h2 className="text-lg font-bold">
+                  {activeModal === "verification" ? "Anti-Fraud Monitor" : "Withdrawal Requests"}
+                </h2>
+                <button
+                  onClick={() => setActiveModal("none")}
+                  className="p-2 rounded-full hover:bg-gray-100 text-gray-500 transition"
+                >
+                  <X className="w-6 h-6" />
+                </button>
+              </div>
+              <div className="p-4 md:p-6 pb-20">
+                {activeModal === "verification" && <EarningsVerificationAdmin sysStatus={sysStatus} />}
+                {activeModal === "withdrawals" && <WithdrawalsAdminPanel user={user} />}
+              </div>
+            </div>
+          </div>
+        )}
 
         <div className="flex flex-wrap gap-2 mb-4">
           <button 
              onClick={() => setActiveTab("dashboard")} 
              className={cn("px-4 py-2 rounded-lg font-medium transition", activeTab === "dashboard" ? "bg-blue-600 text-white shadow-md border border-blue-600" : "bg-white text-gray-700 hover:bg-gray-100 border border-gray-200")}
           >
-            Dashboard & Withdrawals
+            Dashboard
           </button>
           <button 
              onClick={() => setActiveTab("users")} 
@@ -1249,7 +1287,6 @@ function AdminDashboard({
             </div>
           </div>
         </div>
-        <WithdrawalsAdminPanel user={user} />
         </>
         )}
         
@@ -1266,6 +1303,95 @@ function AdminDashboard({
           />
         )}
       </div>
+    </div>
+  );
+}
+
+function EarningsVerificationAdmin({ sysStatus }: { sysStatus: any }) {
+  if (!sysStatus) return null;
+  
+  const suspiciousUsers = sysStatus.suspiciousUsers || [];
+  
+  return (
+    <div className="flex flex-col gap-6 mt-6">
+    <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+      <h2 className="text-lg font-semibold flex items-center gap-2 mb-4">
+        Verification & Anti-Fraud Monitor
+      </h2>
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-4 text-center">
+        <div className="bg-blue-50 p-4 rounded-xl border border-blue-100">
+            <p className="text-xs text-blue-600 font-semibold uppercase">Total Verified</p>
+            <p className="text-xl font-bold text-gray-900 mt-1">{sysStatus.totalVerifiedDls || 0}</p>
+        </div>
+        <div className="bg-red-50 p-4 rounded-xl border border-red-100">
+            <p className="text-xs text-red-600 font-semibold uppercase">Total Rejected</p>
+            <p className="text-xl font-bold text-gray-900 mt-1">{sysStatus.totalRejectedDls || 0}</p>
+        </div>
+        <div className="bg-amber-50 p-4 rounded-xl border border-amber-100">
+            <p className="text-xs text-amber-600 font-semibold uppercase">Fraud Attempts</p>
+            <p className="text-xl font-bold text-gray-900 mt-1">{sysStatus.fraudAttempts || 0}</p>
+        </div>
+        <div className="bg-purple-50 p-4 rounded-xl border border-purple-100">
+            <p className="text-xs text-purple-600 font-semibold uppercase">Pending Earnings</p>
+            <p className="text-xl font-bold text-gray-900 mt-1">₹{(sysStatus.pendingEarningsTotal || 0).toFixed(2)}</p>
+        </div>
+        <div className="bg-green-50 p-4 rounded-xl border border-green-100">
+            <p className="text-xs text-green-600 font-semibold uppercase">Withdrawable</p>
+            <p className="text-xl font-bold text-gray-900 mt-1">₹{(sysStatus.totalWithdrawableEarnings || 0).toFixed(2)}</p>
+        </div>
+      </div>
+    </div>
+    
+    <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+      <h2 className="text-lg font-semibold flex items-center gap-2 mb-4 text-red-600">
+        <AlertTriangle className="w-5 h-5" /> Suspicious Users & Fraud Rules
+      </h2>
+      {suspiciousUsers.length === 0 ? (
+          <p className="text-sm text-gray-500">No high-risk users detected.</p>
+      ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-sm whitespace-nowrap">
+                <thead>
+                    <tr className="border-b border-gray-100 text-gray-500">
+                       <th className="pb-3 px-4 font-medium">Uploader ID</th>
+                       <th className="pb-3 px-4 font-medium">Fraud Score</th>
+                       <th className="pb-3 px-4 font-medium">Total Downloads</th>
+                       <th className="pb-3 px-4 font-medium">Rejected Downloads</th>
+                       <th className="pb-3 px-4 font-medium">Risk Level</th>
+                    </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-50">
+                    {suspiciousUsers.map((su: any, i: number) => {
+                       let levelStr = "Safe";
+                       let levelColor = "text-green-600 bg-green-50";
+                       // 0-30 = Safe, 31-70 = Suspicious, 71-100 = High Risk
+                       if (su.fraudScore > 70) {
+                           levelStr = "High Risk";
+                           levelColor = "text-red-600 bg-red-50";
+                       } else if (su.fraudScore > 30) {
+                           levelStr = "Suspicious";
+                           levelColor = "text-orange-600 bg-orange-50";
+                       }
+                       
+                       return (
+                           <tr key={i} className="hover:bg-gray-50 transition-colors">
+                              <td className="py-3 px-4 font-mono">{su.uploaderId}</td>
+                              <td className="py-3 px-4 font-bold">{su.fraudScore}/100</td>
+                              <td className="py-3 px-4">{su.total}</td>
+                              <td className="py-3 px-4 text-red-600">{su.rejected}</td>
+                              <td className="py-3 px-4">
+                                  <span className={`text-xs px-2 py-1 rounded ${levelColor}`}>
+                                      {levelStr}
+                                  </span>
+                              </td>
+                           </tr>
+                       )
+                    })}
+                </tbody>
+            </table>
+          </div>
+      )}
+    </div>
     </div>
   );
 }
@@ -1741,21 +1867,21 @@ function UsersAdminPanel({ user }: { user: any }) {
               {expandedUser === u.id && (
                 <div className="p-4 bg-white border-t border-gray-200">
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-                    <div className="bg-gray-50 p-3 rounded-lg text-center">
-                      <div className="text-xs text-gray-500 uppercase">Uploads</div>
-                      <div className="font-bold text-gray-900 text-lg">{u.totalUploads}</div>
+                    <div className="bg-gray-50 p-3 rounded-lg text-center border border-gray-100">
+                      <div className="text-xs text-gray-500 uppercase">Downloads (Total/Valid)</div>
+                      <div className="font-bold text-gray-900 text-lg">{u.totalDownloads} / <span className="text-green-600">{u.validDownloads || 0}</span></div>
                     </div>
-                    <div className="bg-gray-50 p-3 rounded-lg text-center">
-                      <div className="text-xs text-gray-500 uppercase">Downloads</div>
-                      <div className="font-bold text-gray-900 text-lg">{u.totalDownloads}</div>
+                    <div className="bg-red-50 p-3 rounded-lg text-center border border-red-100">
+                      <div className="text-xs text-red-500 uppercase">Rejected / Fraud</div>
+                      <div className="font-bold text-red-600 text-lg">{u.rejectedDownloads || 0}</div>
                     </div>
-                    <div className="bg-gray-50 p-3 rounded-lg text-center">
-                      <div className="text-xs text-gray-500 uppercase">Total Earned</div>
-                      <div className="font-bold text-green-600 text-lg">₹{u.totalEarnings.toFixed(2)}</div>
+                    <div className="bg-gray-50 p-3 rounded-lg text-center border border-gray-100">
+                      <div className="text-xs text-gray-500 uppercase">Pending Earnings</div>
+                      <div className="font-bold text-purple-600 text-lg">₹{(u.pendingBalance || 0).toFixed(2)}</div>
                     </div>
-                    <div className="bg-gray-50 p-3 rounded-lg text-center">
-                      <div className="text-xs text-gray-500 uppercase">Revenue Gen.</div>
-                      <div className="font-bold text-blue-600 text-lg">₹{u.totalRevenueGenerated.toFixed(2)}</div>
+                    <div className="bg-green-50 p-3 rounded-lg text-center border border-green-100">
+                      <div className="text-xs text-green-700 uppercase">Total Earned</div>
+                      <div className="font-bold text-green-700 text-lg">₹{u.totalEarnings.toFixed(2)}</div>
                     </div>
                   </div>
                   
@@ -1963,6 +2089,7 @@ function UserSubViews({ userObj, adminUser }: { userObj: any, adminUser: any }) 
   );
 }
 
+
 function AdsAdminPanel({
   botConfig,
   setBotConfig,
@@ -1978,777 +2105,466 @@ function AdsAdminPanel({
   isDirty: boolean;
   handleSave: (config?: any) => void;
 }) {
-  const [activeSubTab, setActiveSubTab] = useState<"ads_list" | "popunder" | "direct_link" | "social_bar" | "analytics">("ads_list");
-  const [showForm, setShowForm] = useState(false);
-  const [editingAdId, setEditingAdId] = useState<string | null>(null);
+  const AD_TYPES = [
+    { id: "header_banner", label: "Header Banner", icon: Tv, bg: false },
+    { id: "middle_banner", label: "Middle Banner", icon: Tv, bg: false },
+    { id: "center_banner", label: "Center Banner", icon: Tv, bg: false },
+    { id: "footer_banner", label: "Footer Banner", icon: Tv, bg: false },
+    { id: "popunder", label: "Popunder Ads", icon: Sliders, bg: true },
+    { id: "push_notification", label: "Push Notification Ads", icon: Zap, bg: true },
+    { id: "in_page_push", label: "In-Page Push Banner", icon: Globe, bg: true },
+    { id: "vignette", label: "Vignette Banner", icon: FileText, bg: true },
+    { id: "direct_link", label: "Direct Link Ads", icon: ExternalLink, bg: true },
+  ];
 
+  const adsList = Array.isArray(botConfig.adsList) ? botConfig.adsList : [];
+  
+  const [searchQuery, setSearchQuery] = useState("");
+  const [filterType, setFilterType] = useState("all");
+  
+  const [showModal, setShowModal] = useState(false);
+  const [showPreviewModal, setShowPreviewModal] = useState<string | null>(null);
+  const [showConfirmDelete, setShowConfirmDelete] = useState<string | null>(null);
+  
   const [formData, setFormData] = useState({
     id: "",
+    placement: "header_banner",
+    enabled: true,
     name: "",
     network: "Adsterra",
-    type: "Banner",
     scriptCode: "",
-    enabled: true,
-    priority: 5,
-    placement: "header_banner",
   });
 
-  // Safe configurations
-  const adsList = botConfig.adsList || [];
-  const popunderConfig = botConfig.popunderConfig || {
-    enabled: false,
-    delay: 3,
-    oncePerSession: false,
-    oncePer24Hours: false,
-    device: "all",
-  };
-  const directLinkConfig = botConfig.directLinkConfig || {
-    url: "",
-    trigger: "download_click",
-  };
-  const socialBarConfig = botConfig.socialBarConfig || {
-    enabled: false,
-    script: "",
-  };
+  const totalAds = adsList.length;
+  const activeAds = adsList.filter((a: any) => a.enabled).length;
+  const disabledAds = adsList.filter((a: any) => !a.enabled).length;
+  const totalClicks = adsList.reduce((sum: number, a: any) => sum + (a.clicks || 0), 0);
+  const totalImpressions = adsList.reduce((sum: number, a: any) => sum + (a.impressions || 0), 0);
 
-  const handleOpenAddForm = () => {
-    setEditingAdId(null);
+  const filteredAds = adsList.filter((ad: any) => {
+    const matchesSearch = ad.name?.toLowerCase().includes(searchQuery.toLowerCase()) || 
+                          (AD_TYPES.find(t => t.id === ad.placement)?.label || ad.placement || "").toLowerCase().includes(searchQuery.toLowerCase());
+    let matchesFilter = true;
+    if (filterType !== 'all') {
+      const p = (ad.placement || "").toLowerCase();
+      if (filterType === 'banner') {
+        matchesFilter = p.includes('banner') && !p.includes('push');
+      } else if (filterType === 'popunder') {
+         matchesFilter = p.includes('popunder');
+      } else if (filterType === 'push') {
+        matchesFilter = p.includes('push');
+      } else if (filterType === 'direct') {
+        matchesFilter = p.includes('direct');
+      }
+    }
+    return matchesSearch && matchesFilter;
+  });
+
+  const openNewAdModal = () => {
     setFormData({
-      id: Math.random().toString(36).substring(2, 9),
+      id: "",
+      placement: AD_TYPES[0].id,
+      enabled: true,
       name: "",
       network: "Adsterra",
-      type: "Banner",
       scriptCode: "",
-      enabled: true,
-      priority: 5,
-      placement: "header_banner",
     });
-    setShowForm(true);
+    setShowModal(true);
   };
 
-  const handleOpenEditForm = (ad: any) => {
-    setEditingAdId(ad.id);
+  const editAd = (ad: any) => {
     setFormData({
-      id: ad.id,
-      name: ad.name || "",
-      network: ad.network || "Adsterra",
-      type: ad.type || "Banner",
-      scriptCode: ad.scriptCode || "",
-      enabled: ad.enabled !== false,
-      priority: ad.priority || 5,
-      placement: ad.placement || "header_banner",
+      ...ad
     });
-    setShowForm(true);
+    setShowModal(true);
   };
 
-  const handleDeleteAd = (id: string) => {
-    if (confirm("Are you sure you want to delete this ad zone configuration?")) {
-      const updated = adsList.filter((a: any) => a.id !== id);
-      const newConfig = { ...botConfig, adsList: updated };
-      setBotConfig(newConfig);
-      handleSave(newConfig);
-    }
-  };
-
-  const handleDuplicateAd = (ad: any) => {
-    const newAd = {
+  const duplicateAd = (ad: any) => {
+    setFormData({
       ...ad,
-      id: Math.random().toString(36).substring(2, 9),
-      name: (ad.name || "Ad Script") + " (Duplicate)",
-      impressions: 0,
-      clicks: 0,
-      ctr: 0,
-    };
-    const updated = [...adsList, newAd];
-    const newConfig = { ...botConfig, adsList: updated };
-    setBotConfig(newConfig);
-    handleSave(newConfig);
-  };
-
-  const handleToggleAdStatus = (id: string) => {
-    const updated = adsList.map((a: any) => {
-      if (a.id === id) {
-        return { ...a, enabled: !a.enabled };
-      }
-      return a;
+      id: "",
+      name: `${ad.name} (Copy)`
     });
-    const newConfig = { ...botConfig, adsList: updated };
-    setBotConfig(newConfig);
-    handleSave(newConfig);
+    setShowModal(true);
   };
 
-  const handleSaveForm = (e: FormEvent) => {
-    e.preventDefault();
-    if (!formData.name.trim()) return;
+  const saveAd = () => {
+    if (!formData.name.trim() || !formData.scriptCode.trim()) {
+      alert("Please enter Ad Name and Script!");
+      return;
+    }
+    
+    const updatedList = [...adsList];
+    const payload = {
+      ...formData,
+      id: formData.id || Math.random().toString(36).substring(2, 9),
+      type: AD_TYPES.find(t => t.id === formData.placement)?.label || "Banner",
+      priority: 10,
+      impressions: formData.id ? (adsList.find((a: any) => a.id === formData.id)?.impressions || 0) : 0,
+      clicks: formData.id ? (adsList.find((a: any) => a.id === formData.id)?.clicks || 0) : 0,
+      ctr: formData.id ? (adsList.find((a: any) => a.id === formData.id)?.ctr || 0) : 0,
+    };
 
-    let updatedList;
-    if (editingAdId) {
-      updatedList = adsList.map((a: any) => {
-        if (a.id === editingAdId) {
-          return {
-            ...a,
-            ...formData,
-            impressions: a.impressions || 0,
-            clicks: a.clicks || 0,
-            ctr: a.ctr || 0,
-          };
-        }
-        return a;
-      });
+    if (formData.id) {
+      const index = updatedList.findIndex((a: any) => a.id === formData.id);
+      if (index >= 0) updatedList[index] = payload;
+      else updatedList.push(payload);
     } else {
-      updatedList = [
-        ...adsList,
-        {
-          ...formData,
-          impressions: 0,
-          clicks: 0,
-          ctr: 0,
-          lastUpdated: new Date().toISOString(),
-        },
-      ];
+      updatedList.push(payload);
     }
 
     const newConfig = { ...botConfig, adsList: updatedList };
     setBotConfig(newConfig);
     handleSave(newConfig);
-    setShowForm(false);
-    setEditingAdId(null);
+    setShowModal(false);
   };
 
-  // Analytics helper maths
-  const totalImpressions = adsList.reduce((sum: number, a: any) => sum + (a.impressions || 0), 0);
-  const totalClicks = adsList.reduce((sum: number, a: any) => sum + (a.clicks || 0), 0);
-  const overallCtr = totalImpressions > 0 ? parseFloat(((totalClicks / totalImpressions) * 100).toFixed(2)) : 0;
+  const confirmDelete = () => {
+    if (!showConfirmDelete) return;
+    const updated = adsList.filter((a: any) => a.id !== showConfirmDelete);
+    const newConfig = { ...botConfig, adsList: updated };
+    setBotConfig(newConfig);
+    handleSave(newConfig);
+    setShowConfirmDelete(null);
+  };
+
+  const toggleAdEnabled = (id: string) => {
+    const updated = adsList.map((a: any) => 
+      a.id === id ? { ...a, enabled: !a.enabled } : a
+    );
+    const newConfig = { ...botConfig, adsList: updated };
+    setBotConfig(newConfig);
+    handleSave(newConfig);
+  };
 
   return (
-    <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 space-y-6 animate-fade-in text-gray-800">
-      
-      {/* Top Title/Save Action Block */}
-      <div className="flex flex-col md:flex-row justify-between md:items-center border-b border-gray-100 pb-5 gap-4">
-        <div>
-          <h2 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
-            <Tv className="w-6 h-6 text-blue-600" />
-            Professional Ads Suite
-          </h2>
-          <p className="text-sm text-gray-500 mt-1">
-            Publish multiple banner ads, configure smart popunder trigger delays, and track dynamic performance metrics.
-          </p>
-        </div>
-        <div className="flex items-center gap-3">
-          {saveSuccess && (
-            <span className="text-xs text-green-700 bg-green-100 border border-green-200 px-3 py-1.5 rounded-lg font-medium animate-pulse">
-              Saved successfully!
-            </span>
-          )}
-          <button
-            onClick={handleSave}
-            disabled={saving || !isDirty}
-            className={cn(
-              "px-5 py-2.5 rounded-xl font-semibold text-sm shadow-sm transition-all active:scale-95 flex items-center gap-2",
-              isDirty 
-                ? "bg-blue-600 hover:bg-blue-700 text-white cursor-pointer" 
-                : "bg-gray-100 text-gray-400 cursor-not-allowed border border-gray-200"
-            )}
-          >
-            {saving ? "Deploying..." : "Publish Ad Settings"}
-          </button>
-        </div>
+    <div className="space-y-6 animate-fade-in">
+      {/* Dashboard Statistics */}
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+        {[
+          { label: "Total Ads", value: totalAds, color: "text-blue-600", bg: "bg-blue-50" },
+          { label: "Active", value: activeAds, color: "text-green-600", bg: "bg-green-50" },
+          { label: "Disabled", value: disabledAds, color: "text-red-600", bg: "bg-red-50" },
+          { label: "Impressions", value: totalImpressions, color: "text-purple-600", bg: "bg-purple-50" },
+          { label: "Clicks", value: totalClicks, color: "text-orange-600", bg: "bg-orange-50" },
+        ].map((stat, i) => (
+          <div key={i} className={`${stat.bg} p-4 rounded-xl border border-gray-100 shadow-sm`}>
+            <div className="text-sm font-bold text-gray-500 mb-1">{stat.label}</div>
+            <div className={`text-2xl font-bold ${stat.color}`}>{stat.value}</div>
+          </div>
+        ))}
       </div>
 
-      {/* Main Enabled Toggle */}
-      <div className="flex items-center justify-between p-4 bg-blue-50/50 rounded-2xl border border-blue-100">
-        <div className="flex gap-3 items-start">
-          <Zap className="w-5 h-5 text-blue-600 mt-0.5 flex-shrink-0" />
-          <div>
-            <span className="font-semibold text-gray-900 block">Overall Ad Service Switch</span>
-            <span className="text-xs text-gray-500 mt-1 block leading-relaxed">
-              Enable or disable banner representations on file details, human validation, and dashboard pages.
-            </span>
-          </div>
-        </div>
-        <button
-          type="button"
-          onClick={() => setBotConfig({ ...botConfig, adsEnabled: !botConfig.adsEnabled })}
-          className={cn(
-            "relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2",
-            botConfig.adsEnabled ? "bg-blue-600" : "bg-gray-200"
-          )}
-        >
-          <span
-            className={cn(
-              "pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out",
-              botConfig.adsEnabled ? "translate-x-5" : "translate-x-0"
-            )}
-          />
-        </button>
-      </div>
-
-      {/* Dashboard Sub-Tabs */}
-      <div className="flex overflow-x-auto gap-2 pb-2 border-b border-gray-100 no-scrollbar">
-        <button
-          onClick={() => { setActiveSubTab("ads_list"); setShowForm(false); }}
-          className={cn(
-            "px-4 py-2 rounded-xl text-sm font-semibold transition-all flex items-center gap-1.5 whitespace-nowrap",
-            activeSubTab === "ads_list" ? "bg-gray-100 text-gray-900" : "text-gray-500 hover:text-gray-900 hover:bg-gray-50"
-          )}
-        >
-          <Tv className="w-4 h-4" /> Manage All Ads ({adsList.length})
-        </button>
-        <button
-          onClick={() => { setActiveSubTab("popunder"); setShowForm(false); }}
-          className={cn(
-            "px-4 py-2 rounded-xl text-sm font-semibold transition-all flex items-center gap-1.5 whitespace-nowrap",
-            activeSubTab === "popunder" ? "bg-gray-100 text-gray-900" : "text-gray-500 hover:text-gray-900 hover:bg-gray-50"
-          )}
-        >
-          <Sliders className="w-4 h-4" /> Special Popunders
-        </button>
-        <button
-          onClick={() => { setActiveSubTab("direct_link"); setShowForm(false); }}
-          className={cn(
-            "px-4 py-2 rounded-xl text-sm font-semibold transition-all flex items-center gap-1.5 whitespace-nowrap",
-            activeSubTab === "direct_link" ? "bg-gray-100 text-gray-900" : "text-gray-500 hover:text-gray-900 hover:bg-gray-50"
-          )}
-        >
-          <ExternalLink className="w-4 h-4" /> Direct Links
-        </button>
-        <button
-          onClick={() => { setActiveSubTab("social_bar"); setShowForm(false); }}
-          className={cn(
-            "px-4 py-2 rounded-xl text-sm font-semibold transition-all flex items-center gap-1.5 whitespace-nowrap",
-            activeSubTab === "social_bar" ? "bg-gray-100 text-gray-900" : "text-gray-500 hover:text-gray-900 hover:bg-gray-50"
-          )}
-        >
-          <Globe className="w-4 h-4" /> Social Bar Banner
-        </button>
-        <button
-          onClick={() => { setActiveSubTab("analytics"); setShowForm(false); }}
-          className={cn(
-            "px-4 py-2 rounded-xl text-sm font-semibold transition-all flex items-center gap-1.5 whitespace-nowrap",
-            activeSubTab === "analytics" ? "bg-gray-100 text-gray-900" : "text-gray-500 hover:text-gray-900 hover:bg-gray-50"
-          )}
-        >
-          <BarChart2 className="w-4 h-4" /> Real Analytics Tracker
-        </button>
-      </div>
-
-      {/* Tab Contents */}
-      {activeSubTab === "ads_list" && (
-        <div className="space-y-6">
-          {!showForm ? (
-            <>
-              <div className="flex justify-between items-center">
-                <span className="text-sm font-bold text-gray-900">Custom Ad Injection List</span>
-                <button
-                  type="button"
-                  onClick={handleOpenAddForm}
-                  className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1 transition-all active:scale-95 cursor-pointer"
-                >
-                  <Plus className="w-3.5 h-3.5" /> Add New Ad
-                </button>
-              </div>
-
-              {adsList.length === 0 ? (
-                <div className="p-8 text-center border-2 border-dashed border-gray-200 rounded-2xl">
-                  <Tv className="w-10 h-10 text-gray-300 mx-auto mb-3" />
-                  <p className="text-gray-500 text-sm font-semibold">No configured banner ad slots found.</p>
-                  <p className="text-gray-400 text-xs mt-1">Click the button above to launch your first persistent script slot.</p>
-                </div>
-              ) : (
-                <div className="grid grid-cols-1 gap-4">
-                  {adsList.map((ad: any) => (
-                    <div
-                      key={ad.id}
-                      className="p-5 border border-gray-200/80 rounded-2xl hover:border-gray-300 transition-all bg-white relative flex flex-col md:flex-row md:items-center justify-between gap-4"
-                    >
-                      <div className="space-y-1">
-                        <div className="flex items-center gap-2">
-                          <span className="font-bold text-gray-900 text-base">{ad.name}</span>
-                          <span className="bg-blue-50 text-blue-700 border border-blue-100 px-2 py-0.5 rounded text-[10px] font-semibold">
-                            {ad.network}
-                          </span>
-                          <span className="bg-gray-50 text-gray-600 border border-gray-200 px-2 py-0.5 rounded text-[10px] font-semibold font-mono">
-                            Priority: {ad.priority}
-                          </span>
-                        </div>
-                        <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-500">
-                          <span><strong>Format:</strong> {ad.type}</span>
-                          <span><strong>Placement:</strong> <span className="font-mono text-blue-600">{ad.placement}</span></span>
-                          <span><strong>Impressions:</strong> {ad.impressions || 0}</span>
-                          <span><strong>CTR:</strong> {ad.ctr || 0}%</span>
-                        </div>
-                      </div>
-
-                      <div className="flex items-center gap-2 flex-wrap">
-                        {/* Status Toggle Button */}
-                        <button
-                          type="button"
-                          onClick={() => handleToggleAdStatus(ad.id)}
-                          className={cn(
-                            "px-2.5 py-1 rounded text-xs font-bold border transition-all cursor-pointer",
-                            ad.enabled
-                              ? "bg-green-50 border-green-200 text-green-700 hover:bg-green-100"
-                              : "bg-gray-50 border-gray-200 text-gray-500 hover:bg-gray-100"
-                          )}
-                        >
-                          {ad.enabled ? "Active" : "Disabled"}
-                        </button>
-
-                        {/* Edit Button */}
-                        <button
-                          type="button"
-                          onClick={() => handleOpenEditForm(ad)}
-                          className="px-2 py-1 bg-gray-50 border border-gray-200 rounded text-xs text-gray-700 hover:bg-gray-100 font-semibold flex items-center gap-1 cursor-pointer"
-                        >
-                          <Edit2 className="w-3.5 h-3.5 text-gray-500" /> Edit
-                        </button>
-
-                        {/* Duplicate Button */}
-                        <button
-                          type="button"
-                          onClick={() => handleDuplicateAd(ad)}
-                          className="px-2 py-1 bg-gray-50 border border-gray-200 rounded text-xs text-gray-700 hover:bg-gray-100 font-semibold flex items-center gap-1 cursor-pointer"
-                        >
-                          <Copy className="w-3.5 h-3.5 text-gray-500" /> Duplicate
-                        </button>
-
-                        {/* Delete Button */}
-                        <button
-                          type="button"
-                          onClick={() => handleDeleteAd(ad.id)}
-                          className="px-2 py-1 bg-red-50 border border-red-200 rounded text-xs text-red-600 hover:bg-red-100 font-semibold flex items-center gap-1 cursor-pointer"
-                        >
-                          <Trash2 className="w-3.5 h-3.5 text-red-400" /> Delete
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </>
-          ) : (
-            <form onSubmit={handleSaveForm} className="space-y-4 border border-gray-100 p-5 rounded-2xl bg-gray-50/50">
-              <h3 className="font-bold text-gray-900 border-b border-gray-100 pb-2 text-sm">
-                {editingAdId ? "Edit Custom Ad Details" : "Launch Custom Ad Parameter Spot"}
-              </h3>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-1">
-                  <label className="block text-xs font-bold text-gray-700">Ad Name / Ref Identifier</label>
-                  <input
-                    type="text"
-                    required
-                    value={formData.name}
-                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                    placeholder="e.g., Download Top native banner"
-                    className="w-full bg-white border border-gray-200 px-3 py-2 rounded-xl text-xs text-gray-800"
-                  />
-                </div>
-
-                <div className="space-y-1">
-                  <label className="block text-xs font-bold text-gray-700">Advertising Network</label>
-                  <select
-                    value={formData.network}
-                    onChange={(e) => setFormData({ ...formData, network: e.target.value })}
-                    className="w-full bg-white border border-gray-200 px-3 py-2 rounded-xl text-xs text-gray-800"
-                  >
-                    <option value="Adsterra">Adsterra</option>
-                    <option value="Monetag">Monetag</option>
-                    <option value="Custom Network">Custom Network</option>
-                  </select>
-                </div>
-
-                <div className="space-y-1">
-                  <label className="block text-xs font-bold text-gray-700">Placement Target Position</label>
-                  <select
-                    value={formData.placement}
-                    onChange={(e) => setFormData({ ...formData, placement: e.target.value })}
-                    className="w-full bg-white border border-gray-200 px-3 py-2 rounded-xl text-xs text-gray-800 font-mono text-blue-600"
-                  >
-                    <option value="header_banner">Header Banner</option>
-                    <option value="footer_banner">Footer Banner</option>
-                    <option value="homepage_top">Homepage Top</option>
-                    <option value="homepage_middle">Homepage Middle</option>
-                    <option value="homepage_bottom">Homepage Bottom</option>
-                    <option value="dashboard_page">Dashboard Page</option>
-                    <option value="download_page">Download Page</option>
-                    <option value="file_details_page">File Details Page</option>
-                    <option value="withdraw_page">Withdraw Page</option>
-                    <option value="custom_placement">Custom Placement</option>
-                  </select>
-                </div>
-
-                <div className="space-y-1">
-                  <label className="block text-xs font-bold text-gray-700">Ad Format Category</label>
-                  <select
-                    value={formData.type}
-                    onChange={(e) => setFormData({ ...formData, type: e.target.value })}
-                    className="w-full bg-white border border-gray-200 px-3 py-2 rounded-xl text-xs text-gray-800"
-                  >
-                    <option value="Banner">Banner</option>
-                    <option value="Native Banner">Native Banner</option>
-                    <option value="Popunder">Popunder</option>
-                    <option value="Direct Link">Direct Link</option>
-                    <option value="Social Bar">Social Bar</option>
-                    <option value="Interstitial">Interstitial</option>
-                    <option value="Push Notification">Push Notification</option>
-                    <option value="Other (Custom)">Other (Custom)</option>
-                  </select>
-                </div>
-
-                <div className="space-y-1">
-                  <label className="block text-xs font-bold text-gray-700">Priority Number (1 to 100)</label>
-                  <input
-                    type="number"
-                    min="1"
-                    max="100"
-                    value={formData.priority}
-                    onChange={(e) => setFormData({ ...formData, priority: parseInt(e.target.value, 10) || 1 })}
-                    className="w-full bg-white border border-gray-200 px-3 py-2 rounded-xl text-xs text-gray-800"
-                  />
-                </div>
-
-                <div className="flex items-center gap-3 pt-6">
-                  <input
-                    type="checkbox"
-                    id="ad_form_enabled"
-                    checked={formData.enabled}
-                    onChange={(e) => setFormData({ ...formData, enabled: e.target.checked })}
-                    className="rounded text-blue-600 focus:ring-blue-500 h-4 w-4"
-                  />
-                  <label htmlFor="ad_form_enabled" className="text-xs font-bold text-gray-700 cursor-pointer">
-                    Enable immediately
-                  </label>
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <label className="block text-xs font-bold text-gray-700">Code Script / Target URL Representation</label>
-                <textarea
-                  rows={6}
-                  required
-                  value={formData.scriptCode}
-                  onChange={(e) => setFormData({ ...formData, scriptCode: e.target.value })}
-                  placeholder="<!-- Paste your HTML, Javascript banner code or enter affiliate direct URL -->"
-                  className="w-full bg-gray-900 border border-gray-850 rounded-xl p-3 text-xs font-mono text-blue-400 placeholder:text-gray-600 leading-relaxed"
-                />
-              </div>
-
-              <div className="flex justify-end gap-2 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setShowForm(false)}
-                  className="px-4 py-2 border border-gray-200 rounded-xl text-xs font-bold text-gray-600 bg-white hover:bg-gray-50 cursor-pointer"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold cursor-pointer"
-                >
-                  Confirm Changes
-                </button>
-              </div>
-            </form>
-          )}
-
-          {/* Legacy single Monetag override fallback indicator */}
-          <div className="bg-gray-50 p-4 rounded-xl border border-gray-200/50 text-xs text-gray-600 mt-6">
-            <h4 className="font-bold text-gray-950 mb-1 flex items-center gap-1">
-              <Info className="w-3.5 h-3.5 text-blue-600" />
-              Dynamic Placements Fallback
-            </h4>
-            <p className="leading-relaxed">
-              If an ad placement has no dynamic configured ads, or you wish to override, you can configure legacy banners as well. These run harmoniously side-by-side with your dynamic priority rules.
-            </p>
-          </div>
-        </div>
-      )}
-
-      {activeSubTab === "popunder" && (
-        <div className="space-y-6">
-          <div className="flex items-center justify-between border-b border-gray-100 pb-3">
-            <div>
-              <span className="font-semibold text-gray-950 block">Dedicated Popunder Special System</span>
-              <span className="text-xs text-gray-500 mt-1 block">Configure advanced trigger settings for full-screen background popunder windows.</span>
-            </div>
-            <button
-              type="button"
-              onClick={() => setBotConfig({
-                ...botConfig,
-                popunderConfig: { ...popunderConfig, enabled: !popunderConfig.enabled }
-              })}
-              className={cn(
-                "relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2",
-                popunderConfig.enabled ? "bg-blue-600" : "bg-gray-200"
-              )}
-            >
-              <span
-                className={cn(
-                  "pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out",
-                  popunderConfig.enabled ? "translate-x-5" : "translate-x-0"
-                )}
-              />
-            </button>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-gray-50 p-6 rounded-2xl border border-gray-200">
-            {/* Delay Setting */}
-            <div className="space-y-2">
-              <label className="block text-xs font-bold text-gray-700">Display Trigger Delay</label>
-              <select
-                value={popunderConfig.delay || 3}
-                onChange={(e) => setBotConfig({
-                  ...botConfig,
-                  popunderConfig: { ...popunderConfig, delay: parseInt(e.target.value, 10) || 3 }
-                })}
-                className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2.5 text-xs text-gray-800"
-              >
-                <option value="3">3 Seconds delay (Fast)</option>
-                <option value="5">5 Seconds delay (Recommended)</option>
-                <option value="10">10 Seconds delay (Standard)</option>
-              </select>
-              <p className="text-[10px] text-gray-400">Specifies how long to wait after page load before arming the trigger.</p>
-            </div>
-
-            {/* Device Filtering */}
-            <div className="space-y-2">
-              <label className="block text-xs font-bold text-gray-700">Device Target Filter</label>
-              <select
-                value={popunderConfig.device || "all"}
-                onChange={(e) => setBotConfig({
-                  ...botConfig,
-                  popunderConfig: { ...popunderConfig, device: e.target.value }
-                })}
-                className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2.5 text-xs text-gray-800"
-              >
-                <option value="all">Display All Browsers (Default)</option>
-                <option value="mobile">Mobile Smart-devices Only</option>
-                <option value="desktop">Desktop Monitors Only</option>
-              </select>
-              <p className="text-[10px] text-gray-400">Restricts showing script codes or links to selected user agents.</p>
-            </div>
-
-            {/* Frequency caps */}
-            <div className="flex items-center gap-2 p-3 bg-white rounded-xl border border-gray-150">
-              <input
-                type="checkbox"
-                id="pop_once_session"
-                checked={!!popunderConfig.oncePerSession}
-                onChange={(e) => setBotConfig({
-                  ...botConfig,
-                  popunderConfig: { ...popunderConfig, oncePerSession: e.target.checked }
-                })}
-                className="rounded text-blue-600 focus:ring-blue-500 h-4 w-4"
-              />
-              <div>
-                <label htmlFor="pop_once_session" className="block text-xs font-bold text-gray-800 cursor-pointer">
-                  Frequency Cap: Once Per Session
-                </label>
-                <span className="text-[10px] text-gray-400 block">Limits window triggers to a maximum of 1 per browser tab life.</span>
-              </div>
-            </div>
-
-            {/* Daily frequency cap */}
-            <div className="flex items-center gap-2 p-3 bg-white rounded-xl border border-gray-150">
-              <input
-                type="checkbox"
-                id="pop_once_24"
-                checked={!!popunderConfig.oncePer24Hours}
-                onChange={(e) => setBotConfig({
-                  ...botConfig,
-                  popunderConfig: { ...popunderConfig, oncePer24Hours: e.target.checked }
-                })}
-                className="rounded text-blue-600 focus:ring-blue-500 h-4 w-4"
-              />
-              <div>
-                <label htmlFor="pop_once_24" className="block text-xs font-bold text-gray-800 cursor-pointer">
-                  Frequency Cap: Once Per 24 Hours
-                </label>
-                <span className="text-[10px] text-gray-400 block">Prevents showing popunders on returning logs if viewed today.</span>
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-amber-50 p-4 rounded-xl border border-amber-200 text-xs text-amber-800 leading-relaxed">
-            <strong>Adaptive Link Mapping:</strong> The system will automatically select the highest priority Popunder script from your Custom Ads list. If none are active, general parameters will run with ad sandbox constraints.
-          </div>
-        </div>
-      )}
-
-      {activeSubTab === "direct_link" && (
-        <div className="space-y-6">
-          <div className="border-b border-gray-100 pb-3">
-            <span className="font-semibold text-gray-950 block">Direct Links Interceptor Settings</span>
-            <span className="text-xs text-gray-500 mt-1 block">Redirect web surfers to affiliate links upon active site interactions.</span>
-          </div>
-
-          <div className="bg-gray-50 p-5 rounded-2xl border border-gray-200 space-y-4">
-            <div className="space-y-1">
-              <label className="block text-xs font-bold text-gray-700">Direct Link Landing URL</label>
-              <input
-                type="url"
-                value={directLinkConfig.url || ""}
-                onChange={(e) => setBotConfig({
-                  ...botConfig,
-                  directLinkConfig: { ...directLinkConfig, url: e.target.value }
-                })}
-                placeholder="https://example.com/direct-affiliate-link"
-                className="w-full bg-white border border-gray-200 px-3 py-2.5 rounded-xl text-xs text-gray-800 font-mono"
-              />
-              <p className="text-[10px] text-gray-400">The destination path users are directed to on clicking selected triggers.</p>
-            </div>
-
-            <div className="space-y-1">
-              <label className="block text-xs font-bold text-gray-700">Trigger Mechanism Event</label>
-              <select
-                value={directLinkConfig.trigger || "download_click"}
-                onChange={(e) => setBotConfig({
-                  ...botConfig,
-                  directLinkConfig: { ...directLinkConfig, trigger: e.target.value }
-                })}
-                className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2.5 text-xs text-gray-800"
-              >
-                <option value="download_click">Open on Final Download Button Click</option>
-                <option value="upload_click">Open on File Selection Drag / Upload Click</option>
-                <option value="button_click">Open with random 35% chance on Any Button/A link</option>
-                <option value="custom_event">Random body click interval trigger</option>
-              </select>
-              <p className="text-[10px] text-gray-400">Specifies precisely what actions or page landmarks evoke the target URL load.</p>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {activeSubTab === "social_bar" && (
-        <div className="space-y-6">
-          <div className="flex items-center justify-between border-b border-gray-100 pb-3">
-            <div>
-              <span className="font-semibold text-gray-950 block">Monetag Social Bar Support</span>
-              <span className="text-xs text-gray-500 mt-1 block">Inject floating slide-in in-page push and dynamic notifications format.</span>
-            </div>
-            <button
-              type="button"
-              onClick={() => setBotConfig({
-                ...botConfig,
-                socialBarConfig: { ...socialBarConfig, enabled: !socialBarConfig.enabled }
-              })}
-              className={cn(
-                "relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2",
-                socialBarConfig.enabled ? "bg-blue-600" : "bg-gray-200"
-              )}
-            >
-              <span
-                className={cn(
-                  "pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out",
-                  socialBarConfig.enabled ? "translate-x-5" : "translate-x-0"
-                )}
-              />
-            </button>
-          </div>
-
-          <div className="space-y-2">
-            <label className="block text-xs font-bold text-gray-700 font-mono text-blue-600">Monetag Social Bar Script Code</label>
-            <textarea
-              rows={8}
-              value={socialBarConfig.script || ""}
-              onChange={(e) => setBotConfig({
-                ...botConfig,
-                socialBarConfig: { ...socialBarConfig, script: e.target.value }
-              })}
-              placeholder="<!-- Paste your Monetag push-notification Social Bar tag code here -->"
-              className="w-full bg-gray-900 border border-gray-850 rounded-xl p-3 text-xs font-mono text-blue-400 placeholder:text-gray-600 leading-relaxed"
+      {/* Toolbar */}
+      <div className="flex flex-col md:flex-row gap-4 items-center justify-between bg-white p-4 rounded-2xl shadow-sm border border-gray-100">
+        <div className="flex flex-col sm:flex-row gap-3 w-full md:w-auto">
+          <div className="relative flex-1 sm:flex-none">
+            <Search className="w-5 h-5 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+            <input
+              type="text"
+              placeholder="Search ads..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-10 pr-4 py-2.5 border border-gray-200 rounded-xl w-full sm:w-64 focus:ring-2 focus:ring-blue-500 shadow-sm text-sm"
             />
           </div>
+          <select
+            value={filterType}
+            onChange={(e) => setFilterType(e.target.value)}
+            className="px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 shadow-sm bg-white text-sm font-medium text-gray-700 w-full sm:w-auto"
+          >
+            <option value="all">All Ads</option>
+            <option value="banner">Banner Ads</option>
+            <option value="popunder">Popunder</option>
+            <option value="push">Push Ads</option>
+            <option value="direct">Direct Link</option>
+          </select>
         </div>
-      )}
-
-      {activeSubTab === "analytics" && (
-        <div className="space-y-6 animate-fade-in">
-          <div className="border-b border-gray-100 pb-3">
-            <span className="font-semibold text-gray-950 block flex items-center gap-1">
-              <BarChart2 className="w-5 h-5 text-blue-600 animate-pulse" />
-              Dynamic Performance Analytics
-            </span>
-            <span className="text-xs text-gray-500 mt-1 block">Inspect persistent script slot performance tracking in real-time.</span>
-          </div>
-
-          {/* Metric Cards */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <div className="bg-gray-50 p-5 rounded-2xl border border-gray-200 flex flex-col justify-between">
-              <span className="text-xs text-gray-500 font-bold uppercase tracking-wider">Total Impressions</span>
-              <span className="text-3xl font-black text-gray-900 mt-2 font-mono">{totalImpressions.toLocaleString()}</span>
-              <span className="text-[10px] text-gray-400 mt-1">Unique displays served</span>
-            </div>
-            <div className="bg-gray-50 p-5 rounded-2xl border border-gray-200 flex flex-col justify-between">
-              <span className="text-xs text-gray-500 font-bold uppercase tracking-wider">Total Clicks</span>
-              <span className="text-3xl font-black text-gray-900 mt-2 font-mono">{totalClicks.toLocaleString()}</span>
-              <span className="text-[10px] text-gray-400 mt-1">Confirmed redirects tracked</span>
-            </div>
-            <div className="bg-gray-50 p-5 rounded-2xl border border-gray-200 flex flex-col justify-between">
-              <span className="text-xs text-gray-500 font-bold uppercase tracking-wider">Average CTR</span>
-              <span className="text-3xl font-black text-blue-600 mt-2 font-mono">{overallCtr}%</span>
-              <span className="text-[10px] text-gray-400 mt-1">Engagement frequency ratio</span>
-            </div>
-          </div>
-
-          {/* Detail Breakdowns */}
-          <div className="p-5 border border-gray-100 rounded-2xl bg-white space-y-4">
-            <h4 className="font-bold text-gray-950 text-sm">Target Breakdowns by Position and Zone</h4>
-            {adsList.length === 0 ? (
-              <p className="text-xs text-gray-500">No active custom zones registered to analyze.</p>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-xs border-collapse">
-                  <thead>
-                    <tr className="border-b border-gray-150 text-gray-500 font-bold">
-                      <th className="py-2">Ad Zone Name</th>
-                      <th className="py-2">Network</th>
-                      <th className="py-2">Type</th>
-                      <th className="py-2 font-mono text-center">Priority</th>
-                      <th className="py-2 text-right">Impressions</th>
-                      <th className="py-2 text-right">Clicks</th>
-                      <th className="py-2 text-right text-blue-600">CTR</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {adsList.map((ad: any) => (
-                      <tr key={ad.id} className="border-b border-gray-50 hover:bg-gray-50/50">
-                        <td className="py-2.5 font-semibold text-gray-900">{ad.name}</td>
-                        <td className="py-2.5">{ad.network}</td>
-                        <td className="py-2.5 text-gray-500 font-semibold">{ad.type}</td>
-                        <td className="py-2.5 font-mono text-center">{ad.priority}</td>
-                        <td className="py-2.5 text-right font-mono text-gray-600">{(ad.impressions || 0).toLocaleString()}</td>
-                        <td className="py-2.5 text-right font-mono text-gray-600">{(ad.clicks || 0).toLocaleString()}</td>
-                        <td className="py-2.5 text-right font-mono font-bold text-blue-600">{ad.ctr || 0}%</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* Constraints Footer */}
-      <div className="bg-amber-50/40 border border-amber-200/50 rounded-2xl p-5 text-sm text-amber-900 grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div className="sm:col-span-2 space-y-1">
-          <h3 className="font-bold mb-1 flex items-center gap-1">
-            ⚠️ Telegram Isolation Compliance
-          </h3>
-          <p className="text-xs text-amber-800 leading-relaxed">
-            All advertising scripts run with strict front-end error sandboxing. Neither Monetag banners, popunders, nor direct links are injected into Telegram bot queries or responses.
-          </p>
-        </div>
-        <div className="flex border-t sm:border-t-0 sm:border-l border-amber-200/60 pt-3 sm:pt-0 sm:pl-4 flex-col justify-center">
-          <span className="text-[10px] text-amber-700 font-bold uppercase">Connected Sandbox</span>
-          <span className="text-xs font-bold text-amber-900 mt-1 flex items-center gap-1">
-            <ShieldCheck className="w-4 h-4 text-green-600" /> Fully Insulated
-          </span>
-        </div>
+        <button
+          onClick={openNewAdModal}
+          className="w-full md:w-auto px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl shadow transition-all active:scale-95 flex items-center justify-center gap-2"
+        >
+          <Plus className="w-5 h-5" /> Create New Ad
+        </button>
       </div>
+
+      {/* Ads Grid */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {filteredAds.length === 0 ? (
+          <div className="col-span-full py-16 text-center text-gray-500 bg-white rounded-2xl border border-gray-100 shadow-sm">
+            <Globe className="w-12 h-12 mx-auto mb-4 text-gray-300" />
+            <h3 className="text-xl font-bold text-gray-700 mb-2">No Ads Found</h3>
+            <p>You haven't created any ads matching this criteria yet.</p>
+          </div>
+        ) : (
+          filteredAds.map((ad: any) => (
+            <div key={ad.id} className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden flex flex-col hover:border-blue-300 hover:shadow-md transition-all relative">
+              {/* Card Header */}
+              <div className="p-5 border-b border-gray-100 flex justify-between items-start gap-3">
+                <div className="min-w-0 flex-1">
+                  <h3 className="font-bold text-lg text-gray-900 mb-2 truncate" title={ad.name}>{ad.name}</h3>
+                  <div className="flex flex-wrap gap-2 items-center">
+                    {ad.enabled ? (
+                      <span className="bg-green-100 text-green-700 text-xs font-bold px-2 py-0.5 rounded uppercase flex items-center gap-1">
+                        <CheckCircle className="w-3 h-3" /> Active
+                      </span>
+                    ) : (
+                      <span className="bg-red-100 text-red-700 text-xs font-bold px-2 py-0.5 rounded uppercase flex items-center gap-1">
+                        <Ban className="w-3 h-3" /> Disabled
+                      </span>
+                    )}
+                    {(!ad.scriptCode || ad.scriptCode.trim() === '') && (
+                       <span className="bg-blue-100 text-blue-700 text-xs font-bold px-2 py-0.5 rounded uppercase">
+                         Draft
+                       </span>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Card Body */}
+              <div className="p-5 flex-1 bg-gray-50/50">
+                <div className="space-y-3">
+                  <div className="flex justify-between items-center bg-white p-3 rounded-lg border border-gray-100 shadow-sm">
+                    <span className="font-bold text-gray-700">Display Slot</span>
+                    <button
+                      type="button"
+                      onClick={() => toggleAdEnabled(ad.id)}
+                      className={cn(
+                        "relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500",
+                        ad.enabled ? "bg-green-500" : "bg-gray-200"
+                      )}
+                    >
+                      <span className={cn("pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200", ad.enabled ? "translate-x-5" : "translate-x-0")} />
+                    </button>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-500 font-medium">Network</span>
+                    <span className="font-bold text-gray-900 truncate max-w-[150px]">{ad.network || "Unknown"}</span>
+                  </div>
+                  <div className="flex justify-between text-sm items-center">
+                    <span className="text-gray-500 font-medium">Placement</span>
+                    <span className="font-bold text-gray-900 truncate pl-2">{AD_TYPES.find(t => t.id === ad.placement)?.label || ad.placement}</span>
+                  </div>
+                  <div className="flex justify-between text-sm pt-3 border-t border-gray-100">
+                    <span className="text-gray-500 font-medium">Impressions</span>
+                    <span className="font-bold text-purple-600">{ad.impressions || 0}</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-500 font-medium">Clicks</span>
+                    <span className="font-bold text-orange-600">{ad.clicks || 0}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Card Footer Actions */}
+              <div className="grid grid-cols-4 border-t border-gray-100 bg-white">
+                <button 
+                  onClick={() => editAd(ad)}
+                  className="py-3 flex justify-center items-center text-gray-500 hover:text-blue-600 hover:bg-blue-50 transition-colors"
+                  title="Edit Ad"
+                >
+                  <Edit2 className="w-5 h-5" />
+                </button>
+                <button 
+                  onClick={() => duplicateAd(ad)}
+                  className="py-3 items-center flex justify-center text-gray-500 hover:text-purple-600 hover:bg-purple-50 transition-colors border-l border-gray-100"
+                  title="Duplicate Ad"
+                >
+                  <Copy className="w-5 h-5" />
+                </button>
+                <button 
+                  onClick={() => setShowPreviewModal(ad.id)}
+                  className="py-3 flex justify-center items-center text-gray-500 hover:text-indigo-600 hover:bg-indigo-50 transition-colors border-l border-gray-100"
+                  title="Live Preview"
+                >
+                  <Eye className="w-5 h-5" />
+                </button>
+                <button 
+                  onClick={() => setShowConfirmDelete(ad.id)}
+                  className="py-3 flex justify-center items-center text-gray-500 hover:text-red-600 hover:bg-red-50 transition-colors border-l border-gray-100"
+                  title="Delete Ad"
+                >
+                  <Trash2 className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+
+      {/* Floating Create Ad Button for Mobile/Desktop */}
+      <button
+        onClick={openNewAdModal}
+        className="fixed bottom-6 right-6 md:bottom-10 md:right-10 z-40 bg-blue-600 hover:bg-blue-700 text-white p-4 rounded-full shadow-2xl transition-all active:scale-90 hover:scale-105 flex items-center justify-center group"
+        title="Create New Ad"
+      >
+        <Plus className="w-6 h-6" />
+        <span className="max-w-0 overflow-hidden group-hover:max-w-xs transition-all duration-300 ease-in-out whitespace-nowrap opacity-0 group-hover:opacity-100 font-bold group-hover:ml-2">
+           Create New Ad
+        </span>
+      </button>
+
+      {/* Saving Overlay */}
+      {saving && (
+        <div className="fixed bottom-4 right-4 bg-gray-900 text-white px-6 py-3 rounded-xl shadow-lg font-bold flex items-center gap-3 z-[60]">
+          <RefreshCcw className="w-5 h-5 animate-spin" />
+          Deploying...
+        </div>
+      )}
+
+      {/* Create / Edit Modal */}
+      {showModal && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-gray-900/60 backdrop-blur-sm overflow-y-auto">
+          <div className="bg-white rounded-2xl shadow-2xl border border-gray-200 w-full max-w-2xl my-auto animate-fade-in relative z-50">
+            <div className="flex justify-between items-center p-6 border-b border-gray-100 sticky top-0 bg-white rounded-t-2xl z-10">
+              <h2 className="text-xl font-bold text-gray-900">
+                {formData.id ? "Edit Ad Configuration" : "Create New Ad"}
+              </h2>
+              <button onClick={() => setShowModal(false)} className="text-gray-400 hover:text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-full p-1 transition-colors">
+                <XCircle className="w-6 h-6" />
+              </button>
+            </div>
+            
+            <div className="p-6 space-y-5">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                <div className="space-y-1">
+                  <label className="block text-sm font-bold text-gray-700">Ad Name</label>
+                  <input 
+                    type="text" 
+                    value={formData.name} 
+                    onChange={(e) => setFormData(prev => ({...prev, name: e.target.value}))}
+                    placeholder="e.g. Native Banner 1" 
+                    className="w-full border border-gray-200 px-4 py-2.5 rounded-xl focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="block text-sm font-bold text-gray-700">Ad Network</label>
+                  <input 
+                    type="text" 
+                    value={formData.network} 
+                    onChange={(e) => setFormData(prev => ({...prev, network: e.target.value}))}
+                    placeholder="e.g. Monetag, Adsterra" 
+                    className="w-full border border-gray-200 px-4 py-2.5 rounded-xl focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+              </div>
+              
+              <div className="space-y-1">
+                <label className="block text-sm font-bold text-gray-700">Placement Slot</label>
+                <select
+                  value={formData.placement}
+                  onChange={(e) => setFormData(prev => ({...prev, placement: e.target.value}))}
+                  className="w-full border border-gray-200 px-4 py-2.5 rounded-xl focus:ring-2 focus:ring-blue-500 bg-white font-medium"
+                >
+                  {AD_TYPES.map(t => (
+                    <option key={t.id} value={t.id}>{t.label} {t.bg ? "(Background/Popup)" : "(Visible Box)"}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="space-y-1">
+                <label className="block text-sm font-bold text-gray-700">Ad Script Box (HTML/JS)</label>
+                <textarea 
+                  rows={6} 
+                  value={formData.scriptCode} 
+                  onChange={(e) => setFormData(prev => ({...prev, scriptCode: e.target.value}))}
+                  placeholder="<!-- Paste script here -->"
+                  className="w-full border border-gray-200 px-4 py-3 rounded-xl bg-gray-900 text-green-400 font-mono text-sm leading-snug shadow-inner"
+                />
+              </div>
+              
+              <div className="flex items-center gap-3 bg-gray-50 p-4 rounded-xl border border-gray-100">
+                <input 
+                   type="checkbox" 
+                   id="ad-enabled-checkbox"
+                   checked={formData.enabled}
+                   onChange={(e) => setFormData(prev => ({...prev, enabled: e.target.checked}))}
+                   className="w-5 h-5 text-blue-600 rounded border-gray-300 focus:ring-blue-500"
+                />
+                <label htmlFor="ad-enabled-checkbox" className="font-bold text-gray-700 cursor-pointer">
+                  Enable this Ad immediately
+                </label>
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-3 p-6 border-t border-gray-100 bg-gray-50/50 rounded-b-2xl sticky bottom-0 z-10 w-full">
+              <button 
+                onClick={() => setShowModal(false)}
+                className="px-6 py-2.5 font-bold text-gray-600 hover:bg-gray-200 rounded-xl transition-all"
+              >
+                Cancel
+              </button>
+              <button 
+                onClick={saveAd}
+                className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl shadow transition-all flex items-center gap-2"
+              >
+                <Check className="w-5 h-5" />
+                Save Ad Configuration
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {showConfirmDelete && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-gray-900/60 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm overflow-hidden animate-fade-in relative z-50">
+             <div className="bg-red-50 p-6 flex flex-col items-center border-b border-red-100">
+               <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mb-4 text-red-600">
+                 <AlertTriangle className="w-6 h-6" />
+               </div>
+               <h3 className="text-xl font-bold text-gray-900 text-center mb-1">Delete Ad?</h3>
+               <p className="text-red-600 text-sm text-center font-medium">This action cannot be undone.</p>
+             </div>
+             <div className="p-6">
+               <div className="flex justify-end gap-3 mt-2">
+                 <button 
+                   onClick={() => setShowConfirmDelete(null)}
+                   className="w-full px-4 py-2.5 font-bold text-gray-600 hover:bg-gray-100 rounded-xl transition-all"
+                 >
+                   Cancel
+                 </button>
+                 <button 
+                   onClick={confirmDelete}
+                   className="w-full px-4 py-2.5 bg-red-600 hover:bg-red-700 text-white font-bold rounded-xl shadow transition-all"
+                 >
+                   Yes, Delete
+                 </button>
+               </div>
+             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Preview Modal */}
+      {showPreviewModal && (
+        <div className="fixed inset-0 z-[100] flex flex-col p-4 md:p-8 bg-gray-900/80 backdrop-blur-md">
+           <div className="flex justify-between items-center mb-4 relative z-50">
+              <h2 className="text-2xl font-bold text-white flex items-center gap-2">
+                <Eye className="w-6 h-6 text-blue-400" />
+                Ad Preview Mode
+              </h2>
+              <button 
+                 onClick={() => setShowPreviewModal(null)} 
+                 className="bg-white/10 hover:bg-white/20 text-white p-2 rounded-xl transition-all"
+              >
+                <XCircle className="w-8 h-8" />
+              </button>
+           </div>
+           <div className="flex-1 bg-white rounded-2xl overflow-hidden shadow-2xl relative border-4 border-gray-800 z-50">
+              <iframe 
+                src={`/file/preview?preview_ad=${showPreviewModal}`} 
+                className="w-full h-full border-none bg-white"
+                sandbox="allow-scripts allow-popups allow-popups-to-escape-sandbox allow-same-origin"
+                title="Ad Preview"
+              />
+           </div>
+        </div>
+      )}
 
     </div>
   );
 }
+
