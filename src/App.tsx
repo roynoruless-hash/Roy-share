@@ -103,7 +103,7 @@ export default function App() {
   const [adsConfig, setAdsConfig] = useState<any>(null);
 
   useEffect(() => {
-    fetch("/api/public-ads-config")
+    fetchApi("/api/public-display-config")
       .then((res) => res.json())
       .then((data) => {
         setAdsConfig(data);
@@ -306,6 +306,31 @@ export default function App() {
   );
 }
 
+// Use relative URLs during local development so that the Vite proxy handles it correctly,
+// but use VITE_API_URL in production (e.g. Netlify) if configured
+const isDev = import.meta.env.DEV;
+const API_BASE_URL = isDev ? "" : (import.meta.env.VITE_API_URL || "");
+
+async function fetchApi(endpoint: string, options?: RequestInit) {
+  const url = `${API_BASE_URL}${endpoint}`;
+  console.log(`[API Request] Calling exact endpoint: ${url}`);
+  let res;
+  try {
+    res = await fetch(url, options);
+  } catch (err: any) {
+    console.error(`[API Error] fetch() dashed on ${url}:`, err);
+    throw new Error(`Failed to fetch from ${url}: ${err.message}`);
+  }
+  
+  const contentType = res.headers.get("content-type");
+  if (contentType && contentType.includes("text/html")) {
+    const text = await res.text();
+    console.error(`[API Error] Received HTML from ${url}`, text.substring(0, 200));
+    throw new Error(`Endpoint ${url} returned HTML instead of JSON. Expected JSON API.`);
+  }
+  return res;
+}
+
 function AdminDashboard({
   user,
   onLogout,
@@ -442,25 +467,17 @@ function AdminDashboard({
 
   const fetchStatus = async () => {
     try {
-      const res = await fetch("/api/admin/status");
+      const res = await fetchApi("/api/admin/status");
       if (!res.ok) throw new Error(await res.text());
-      const contentType = res.headers.get("content-type");
-      if (contentType && contentType.includes("text/html")) {
-        throw new Error("API proxy missing on Netlify");
-      }
       const data = await res.json();
       setSysStatus(data);
 
       if (user) {
         const token = await user.getIdToken();
-        const statsRes = await fetch("/api/admin/storage-stats", {
+        const statsRes = await fetchApi("/api/admin/storage-stats", {
           headers: { Authorization: `Bearer ${token}` },
         });
         if (statsRes.ok) {
-          const statsType = statsRes.headers.get("content-type");
-          if (statsType && statsType.includes("text/html")) {
-             throw new Error("Received HTML. API proxy is misconfigured or missing.");
-          }
           setStorageStats(await statsRes.json());
         }
       }
@@ -518,7 +535,7 @@ function AdminDashboard({
         const token = await user.getIdToken();
         // Fire-and-forget sync for backend process (if it is alive)
         try {
-          fetch("/api/admin/config/sync_mem", {
+          fetchApi("/api/admin/config/sync_mem", {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
@@ -568,7 +585,7 @@ function AdminDashboard({
     setDiagResult(null);
     try {
       const token = await user.getIdToken();
-      const res = await fetch("/api/admin/diagnose", {
+      const res = await fetchApi("/api/admin/diagnose", {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (!res.ok) throw new Error(await res.text());
@@ -588,7 +605,7 @@ function AdminDashboard({
     setAuditResult(null);
     try {
       const token = await user.getIdToken();
-      const res = await fetch("/api/admin/audit", {
+      const res = await fetchApi("/api/admin/audit", {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (!res.ok) throw new Error(await res.text());
@@ -844,7 +861,7 @@ function AdminDashboard({
                     onClick={async () => {
                       try {
                         const token = await user.getIdToken();
-                        const res = await fetch("/api/admin/test-command", {
+                        const res = await fetchApi("/api/admin/test-command", {
                           method: "POST",
                           headers: {
                             "Content-Type": "application/json",
@@ -1266,16 +1283,12 @@ function WithdrawalsAdminPanel({ user }: { user: any }) {
   const fetchWithdrawals = async () => {
     try {
       const token = await user.getIdToken();
-      const res = await fetch("/api/admin/withdrawals", {
+      const res = await fetchApi("/api/admin/withdrawals", {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (!res.ok) {
         console.error("Failed to load withdrawals", res.status);
         return;
-      }
-      const contentType = res.headers.get("content-type");
-      if (contentType && contentType.includes("text/html")) {
-        throw new Error("Received HTML. API proxy is misconfigured or missing.");
       }
       const text = await res.text();
       try {
@@ -1301,7 +1314,7 @@ function WithdrawalsAdminPanel({ user }: { user: any }) {
     console.log(`handleStatus called for id=${id}, status=${status}`);
     try {
       const token = await user.getIdToken();
-      const res = await fetch(`/api/admin/withdrawals/${id}/status`, {
+      const res = await fetchApi(`/api/admin/withdrawals/${id}/status`, {
         method: "POST",
         headers: {
           Authorization: `Bearer ${token}`,
@@ -1576,14 +1589,11 @@ function UsersAdminPanel({ user }: { user: any }) {
   const fetchUsers = async () => {
     try {
       const token = await user.getIdToken();
-      const res = await fetch("/api/admin/users", {
+      const res = await fetchApi("/api/admin/users", {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (!res.ok) return;
-      const contentType = res.headers.get("content-type");
-      if (contentType && contentType.includes("text/html")) {
-        throw new Error("Received HTML. API proxy is misconfigured or missing.");
-      }
+      
       const data = await res.json();
       setUsers(data);
     } catch (e: any) {
@@ -1611,7 +1621,7 @@ function UsersAdminPanel({ user }: { user: any }) {
     setBlockModal(null);
     try {
       const token = await user.getIdToken();
-      const res = await fetch(`/api/admin/users/${userId}/${actionName}`, {
+      const res = await fetchApi(`/api/admin/users/${userId}/${actionName}`, {
         method: "POST",
         headers: { 
           Authorization: `Bearer ${token}`,
@@ -1644,7 +1654,7 @@ function UsersAdminPanel({ user }: { user: any }) {
     setBalanceModal(null);
     try {
       const token = await user.getIdToken();
-      const res = await fetch(`/api/admin/users/${userId}/balance`, {
+      const res = await fetchApi(`/api/admin/users/${userId}/balance`, {
         method: "POST",
         headers: { 
           Authorization: `Bearer ${token}`,
@@ -1857,7 +1867,7 @@ function UserSubViews({ userObj, adminUser }: { userObj: any, adminUser: any }) 
     setLoading(true);
     try {
       const token = await adminUser.getIdToken();
-      const res = await fetch(`/api/admin/users/${userObj.id}/${type}`, {
+      const res = await fetchApi(`/api/admin/users/${userObj.id}/${type}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       if (res.ok) {

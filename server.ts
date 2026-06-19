@@ -1,5 +1,6 @@
 import "dotenv/config";
 import express from "express";
+import cors from "cors";
 import path from "path";
 import fs from "fs";
 import { createServer as createViteServer } from "vite";
@@ -165,6 +166,7 @@ let lastTelegramResponse: any = null;
 
 const app = express();
 
+app.use(cors());
 app.use(express.json());
 
 app.get("/api/health", (req, res) => {
@@ -217,7 +219,7 @@ async function saveAdsConfigInternal() {
   }
 }
 
-app.get("/api/public-ads-config", (req, res) => {
+app.get("/api/public-display-config", (req, res) => {
   res.json({
     adsEnabled,
     adsScript,
